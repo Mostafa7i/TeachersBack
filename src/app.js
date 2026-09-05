@@ -26,13 +26,12 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (
-        allowedOrigins.indexOf(origin) !== -1 ||
-        process.env.NODE_ENV === "development"
-      ) {
-        return callback(null, true);
-      }
+      if (!origin) return callback(null, true); // Same-origin / curl / health checks
+      const isAllowed =
+        allowedOrigins.includes(origin) ||
+        /^https:\/\/.*\.vercel\.app$/.test(origin) || // Any *.vercel.app preview
+        process.env.NODE_ENV === "development";
+      if (isAllowed) return callback(null, true);
       return callback(new Error("CORS not allowed for this origin"), false);
     },
     credentials: true,
