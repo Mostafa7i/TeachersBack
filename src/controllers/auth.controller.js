@@ -293,16 +293,20 @@ exports.googleAuth = catchAsync(async (req, res) => {
       needsSave = true;
     }
 
-    // Check if profile is complete (admins are always complete, teachers need phone & subjects)
+    // Preserve isProfileComplete: admins are always complete; if already completed, preserve true;
+    // otherwise check if user has subjects assigned.
     if (user.role?.isSystem) {
       user.isProfileComplete = true;
       needsSave = true;
+    } else if (user.isProfileComplete === true) {
+      // Already completed previously — keep it true permanently!
     } else {
-      const hasPhone = !!(user.phone && user.phone.trim());
       const hasSubject =
         Array.isArray(user.subjects) && user.subjects.length > 0;
-      user.isProfileComplete = hasPhone && hasSubject;
-      needsSave = true;
+      if (hasSubject) {
+        user.isProfileComplete = true;
+        needsSave = true;
+      }
     }
 
     user.lastLogin = new Date();
