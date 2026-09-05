@@ -1,7 +1,7 @@
 require("dotenv").config();
 const app = require("./app");
 const connectDB = require("./config/db");
-const { ensureSubjects } = require("./utils/initSubjects");
+const { ensureSystemInit } = require("./utils/initSystem");
 
 const PORT = process.env.PORT || 5000;
 
@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await connectDB();
-    await ensureSubjects();
+    await ensureSystemInit();
     const server = app.listen(PORT, () => {
       console.log(`=============================================`);
       console.log(`🚀 خادم نظام إدارة الجداول المدرسية يعمل الآن`);

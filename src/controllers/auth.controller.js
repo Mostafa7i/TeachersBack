@@ -230,11 +230,23 @@ exports.googleAuth = catchAsync(async (req, res) => {
     });
 
     if (!teacherRole) {
-      teacherRole = await Role.findOne({});
+      const { ensureSystemInit } = require("../utils/initSystem");
+      await ensureSystemInit();
+      teacherRole = await Role.findOne({
+        $or: [
+          { name: { $regex: /معلم|teacher/i } },
+          { isSystem: false },
+        ],
+      }) || await Role.findOne({});
     }
 
     if (!teacherRole) {
-      return error(res, "لم يتم العثور على دور المعلم في النظام، يرجى تهيئة النظام أولاً.", 500);
+      teacherRole = await Role.create({
+        name: "معلم (Teacher)",
+        description: "معلم مادة - صلاحيات تلقائية",
+        permissions: [],
+        isSystem: false,
+      });
     }
 
     // Create new Teacher user with isProfileComplete = false
