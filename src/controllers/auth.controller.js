@@ -352,7 +352,11 @@ exports.completeProfile = catchAsync(async (req, res) => {
   }
 
   if (selectedIds.length === 0) {
-    return error(res, "يرجى اختيار مادة دراسية واحدة على الأقل من المواد التي تدرسها.", 400);
+    return error(
+      res,
+      "يرجى اختيار مادة دراسية واحدة على الأقل من المواد التي تدرسها.",
+      400,
+    );
   }
 
   // Validate subject existence
