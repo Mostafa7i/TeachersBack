@@ -28,7 +28,7 @@ const connectDB = async () => {
     cached.promise = mongoose
       .connect(
         process.env.MONGODB_URI || "mongodb://localhost:27017/school_schedule",
-        opts
+        opts,
       )
       .then((conn) => {
         console.log(`✅ MongoDB متصل بنجاح: ${conn.connection.host}`);
@@ -46,4 +46,3 @@ const connectDB = async () => {
 };
 
 module.exports = connectDB;
-
