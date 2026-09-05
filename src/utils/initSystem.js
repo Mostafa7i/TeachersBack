@@ -6,53 +6,198 @@ const SchoolSettings = require("../models/SchoolSettings.model");
 
 const DEFAULT_PERMISSIONS = [
   // Schedules
-  { name: "schedules.view", description: "مشاهدة الجداول الأسبوعية", module: "schedules", action: "view" },
-  { name: "schedules.create", description: "إنشاء حصة أو جدول جديد", module: "schedules", action: "create" },
-  { name: "schedules.edit", description: "تعديل كامل بيانات الحصة والجدول", module: "schedules", action: "edit" },
-  { name: "schedules.edit_title", description: "تعديل عنوان الدرس فقط", module: "schedules", action: "edit_title" },
-  { name: "schedules.edit_homework", description: "تعديل الواجبات فقط", module: "schedules", action: "edit_homework" },
-  { name: "schedules.edit_activities", description: "تعديل الأنشطة فقط", module: "schedules", action: "edit_activities" },
-  { name: "schedules.edit_notes", description: "تعديل الملاحظات فقط", module: "schedules", action: "edit_notes" },
-  { name: "schedules.delete", description: "حذف حصة من الجدول", module: "schedules", action: "delete" },
-  { name: "schedules.copy_week", description: "نسخ جدول أسبوع كامل إلى أسبوع آخر", module: "schedules", action: "copy_week" },
-  { name: "schedules.export", description: "تصدير الجدول كصورة PNG أو مستند PDF", module: "schedules", action: "export" },
+  {
+    name: "schedules.view",
+    description: "مشاهدة الجداول الأسبوعية",
+    module: "schedules",
+    action: "view",
+  },
+  {
+    name: "schedules.create",
+    description: "إنشاء حصة أو جدول جديد",
+    module: "schedules",
+    action: "create",
+  },
+  {
+    name: "schedules.edit",
+    description: "تعديل كامل بيانات الحصة والجدول",
+    module: "schedules",
+    action: "edit",
+  },
+  {
+    name: "schedules.edit_title",
+    description: "تعديل عنوان الدرس فقط",
+    module: "schedules",
+    action: "edit_title",
+  },
+  {
+    name: "schedules.edit_homework",
+    description: "تعديل الواجبات فقط",
+    module: "schedules",
+    action: "edit_homework",
+  },
+  {
+    name: "schedules.edit_activities",
+    description: "تعديل الأنشطة فقط",
+    module: "schedules",
+    action: "edit_activities",
+  },
+  {
+    name: "schedules.edit_notes",
+    description: "تعديل الملاحظات فقط",
+    module: "schedules",
+    action: "edit_notes",
+  },
+  {
+    name: "schedules.delete",
+    description: "حذف حصة من الجدول",
+    module: "schedules",
+    action: "delete",
+  },
+  {
+    name: "schedules.copy_week",
+    description: "نسخ جدول أسبوع كامل إلى أسبوع آخر",
+    module: "schedules",
+    action: "copy_week",
+  },
+  {
+    name: "schedules.export",
+    description: "تصدير الجدول كصورة PNG أو مستند PDF",
+    module: "schedules",
+    action: "export",
+  },
 
   // Users
-  { name: "users.view", description: "عرض قائمة المستخدمين والمعلمين", module: "users", action: "view" },
-  { name: "users.create", description: "إضافة مستخدم أو معلم جديد", module: "users", action: "create" },
-  { name: "users.edit", description: "تعديل بيانات المستخدم أو المعلم", module: "users", action: "edit" },
-  { name: "users.delete", description: "حذف مستخدم أو معلم من النظام", module: "users", action: "delete" },
+  {
+    name: "users.view",
+    description: "عرض قائمة المستخدمين والمعلمين",
+    module: "users",
+    action: "view",
+  },
+  {
+    name: "users.create",
+    description: "إضافة مستخدم أو معلم جديد",
+    module: "users",
+    action: "create",
+  },
+  {
+    name: "users.edit",
+    description: "تعديل بيانات المستخدم أو المعلم",
+    module: "users",
+    action: "edit",
+  },
+  {
+    name: "users.delete",
+    description: "حذف مستخدم أو معلم من النظام",
+    module: "users",
+    action: "delete",
+  },
 
   // Roles
-  { name: "roles.view", description: "عرض الأدوار والصلاحيات", module: "roles", action: "view" },
-  { name: "roles.create", description: "إنشاء دور جديد", module: "roles", action: "create" },
-  { name: "roles.edit", description: "تعديل الأدوار والصلاحيات المسندة", module: "roles", action: "edit" },
-  { name: "roles.delete", description: "حذف دور من النظام", module: "roles", action: "delete" },
+  {
+    name: "roles.view",
+    description: "عرض الأدوار والصلاحيات",
+    module: "roles",
+    action: "view",
+  },
+  {
+    name: "roles.create",
+    description: "إنشاء دور جديد",
+    module: "roles",
+    action: "create",
+  },
+  {
+    name: "roles.edit",
+    description: "تعديل الأدوار والصلاحيات المسندة",
+    module: "roles",
+    action: "edit",
+  },
+  {
+    name: "roles.delete",
+    description: "حذف دور من النظام",
+    module: "roles",
+    action: "delete",
+  },
 
   // Subjects
-  { name: "subjects.view", description: "عرض المواد الدراسية", module: "subjects", action: "view" },
-  { name: "subjects.create", description: "إضافة مادة دراسية جديدة", module: "subjects", action: "create" },
-  { name: "subjects.edit", description: "تعديل مادة دراسية", module: "subjects", action: "edit" },
-  { name: "subjects.delete", description: "حذف مادة دراسية", module: "subjects", action: "delete" },
+  {
+    name: "subjects.view",
+    description: "عرض المواد الدراسية",
+    module: "subjects",
+    action: "view",
+  },
+  {
+    name: "subjects.create",
+    description: "إضافة مادة دراسية جديدة",
+    module: "subjects",
+    action: "create",
+  },
+  {
+    name: "subjects.edit",
+    description: "تعديل مادة دراسية",
+    module: "subjects",
+    action: "edit",
+  },
+  {
+    name: "subjects.delete",
+    description: "حذف مادة دراسية",
+    module: "subjects",
+    action: "delete",
+  },
 
   // Settings
-  { name: "settings.view", description: "عرض إعدادات وبيانات المدرسة", module: "settings", action: "view" },
-  { name: "settings.edit", description: "تعديل إعدادات وشعار المدرسة", module: "settings", action: "edit" },
+  {
+    name: "settings.view",
+    description: "عرض إعدادات وبيانات المدرسة",
+    module: "settings",
+    action: "view",
+  },
+  {
+    name: "settings.edit",
+    description: "تعديل إعدادات وشعار المدرسة",
+    module: "settings",
+    action: "edit",
+  },
 
   // Audit logs
-  { name: "audit-logs.view", description: "عرض سجل العمليات وتدقيق النظام", module: "audit-logs", action: "view" },
+  {
+    name: "audit-logs.view",
+    description: "عرض سجل العمليات وتدقيق النظام",
+    module: "audit-logs",
+    action: "view",
+  },
 ];
 
 const REQUIRED_SUBJECTS = [
   { name: "فنية", nameEn: "Art Education", code: "ART", color: "#ec4899" },
   { name: "رياضيات", nameEn: "Mathematics", code: "MATH", color: "#2563eb" },
-  { name: "رقمية", nameEn: "Digital Skills", code: "DIGITAL", color: "#0284c7" },
+  {
+    name: "رقمية",
+    nameEn: "Digital Skills",
+    code: "DIGITAL",
+    color: "#0284c7",
+  },
   { name: "توحيد", nameEn: "Tawhid", code: "TAWHID", color: "#059669" },
-  { name: "English", nameEn: "English Language", code: "ENG", color: "#7c3aed" },
-  { name: "لغتي", nameEn: "Arabic (Lughati)", code: "LUGHATI", color: "#10b981" },
+  {
+    name: "English",
+    nameEn: "English Language",
+    code: "ENG",
+    color: "#7c3aed",
+  },
+  {
+    name: "لغتي",
+    nameEn: "Arabic (Lughati)",
+    code: "LUGHATI",
+    color: "#10b981",
+  },
   { name: "بدنية", nameEn: "Physical Education", code: "PE", color: "#f59e0b" },
   { name: "تفسير", nameEn: "Tafsir", code: "TAFSIR", color: "#0d9488" },
-  { name: "اجتماعيات", nameEn: "Social Studies", code: "SOCIAL", color: "#d97706" },
+  {
+    name: "اجتماعيات",
+    nameEn: "Social Studies",
+    code: "SOCIAL",
+    color: "#d97706",
+  },
   { name: "حديث", nameEn: "Hadith", code: "HADITH", color: "#84cc16" },
   { name: "علوم", nameEn: "Science", code: "SCI", color: "#06b6d4" },
 ];
@@ -91,10 +236,7 @@ const ensureSystemInit = async () => {
 
     // 3) Ensure Teacher Role
     let teacherRole = await Role.findOne({
-      $or: [
-        { name: { $regex: /معلم|teacher/i } },
-        { isSystem: false },
-      ],
+      $or: [{ name: { $regex: /معلم|teacher/i } }, { isSystem: false }],
     });
     if (!teacherRole) {
       const teacherPerms = [
@@ -109,7 +251,8 @@ const ensureSystemInit = async () => {
 
       teacherRole = await Role.create({
         name: "معلم (Teacher)",
-        description: "معلم مادة - صلاحيات تحضير وتعديل الحقول الخاصة بحصصه ومادته وتصدير الجدول",
+        description:
+          "معلم مادة - صلاحيات تحضير وتعديل الحقول الخاصة بحصصه ومادته وتصدير الجدول",
         permissions: teacherPerms,
         isSystem: false,
       });
@@ -128,7 +271,9 @@ const ensureSystemInit = async () => {
         isProfileComplete: true,
         phone: "0500000000",
       });
-      console.log("👤 تم إنشاء حساب المدير الافتراضي: admin@school.com / Admin@123456");
+      console.log(
+        "👤 تم إنشاء حساب المدير الافتراضي: admin@school.com / Admin@123456",
+      );
     }
 
     // 5) Ensure Subjects

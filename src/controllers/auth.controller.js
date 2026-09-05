@@ -180,7 +180,13 @@ const decodeGoogleToken = (token) => {
  * Handle Google OAuth login and registration
  */
 exports.googleAuth = catchAsync(async (req, res) => {
-  const { credential, email: bodyEmail, name: bodyName, googleId: bodyGoogleId, avatar: bodyAvatar } = req.body;
+  const {
+    credential,
+    email: bodyEmail,
+    name: bodyName,
+    googleId: bodyGoogleId,
+    avatar: bodyAvatar,
+  } = req.body;
 
   let email = bodyEmail;
   let name = bodyName;
@@ -223,21 +229,16 @@ exports.googleAuth = catchAsync(async (req, res) => {
 
     // Find default teacher role
     let teacherRole = await Role.findOne({
-      $or: [
-        { name: { $regex: /معلم|teacher/i } },
-        { isSystem: false },
-      ],
+      $or: [{ name: { $regex: /معلم|teacher/i } }, { isSystem: false }],
     });
 
     if (!teacherRole) {
       const { ensureSystemInit } = require("../utils/initSystem");
       await ensureSystemInit();
-      teacherRole = await Role.findOne({
-        $or: [
-          { name: { $regex: /معلم|teacher/i } },
-          { isSystem: false },
-        ],
-      }) || await Role.findOne({});
+      teacherRole =
+        (await Role.findOne({
+          $or: [{ name: { $regex: /معلم|teacher/i } }, { isSystem: false }],
+        })) || (await Role.findOne({}));
     }
 
     if (!teacherRole) {
@@ -298,7 +299,8 @@ exports.googleAuth = catchAsync(async (req, res) => {
       needsSave = true;
     } else {
       const hasPhone = !!(user.phone && user.phone.trim());
-      const hasSubject = Array.isArray(user.subjects) && user.subjects.length > 0;
+      const hasSubject =
+        Array.isArray(user.subjects) && user.subjects.length > 0;
       user.isProfileComplete = hasPhone && hasSubject;
       needsSave = true;
     }
@@ -345,7 +347,8 @@ exports.completeProfile = catchAsync(async (req, res) => {
     return error(res, "رقم الجوال مطلوب للتواصل.", 400);
   }
 
-  const selectedSubjectId = subjectId || (Array.isArray(subjectIds) && subjectIds[0]);
+  const selectedSubjectId =
+    subjectId || (Array.isArray(subjectIds) && subjectIds[0]);
 
   if (!selectedSubjectId) {
     return error(res, "يرجى اختيار مادتك الدراسية الأساسية.", 400);
