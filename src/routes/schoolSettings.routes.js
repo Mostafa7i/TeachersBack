@@ -12,16 +12,19 @@ router.get(
   requirePermission(["settings.view", "schedules.view"]),
   schoolSettingsController.getSettings,
 );
+
 router.put(
   "/",
   requirePermission("settings.edit"),
   schoolSettingsController.updateSettings,
 );
-router.post(
-  "/upload-logo",
+
+// PATCH /logo — receives a Cloudinary URL and saves it to DB
+// (replaces the old multer-based POST /upload-logo)
+router.patch(
+  "/logo",
   requirePermission("settings.edit"),
-  schoolSettingsController.uploadMiddleware,
-  schoolSettingsController.uploadLogo,
+  schoolSettingsController.updateLogo,
 );
 
 module.exports = router;

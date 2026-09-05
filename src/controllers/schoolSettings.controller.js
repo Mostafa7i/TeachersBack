@@ -1,45 +1,7 @@
-const path = require("path");
-const fs = require("fs");
-const multer = require("multer");
 const SchoolSettings = require("../models/SchoolSettings.model");
 const catchAsync = require("../utils/catchAsync");
 const { success, error } = require("../utils/apiResponse");
 const { createAuditLog } = require("../middleware/auditLog.middleware");
-
-// Setup multer storage for school logo
-const uploadDir = path.join(__dirname, "../../uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `school-logo-${Date.now()}${ext}`);
-  },
-});
-
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith("image/")) {
-    cb(null, true);
-  } else {
-    cb(
-      new Error("الملف المرفوع يجب أن يكون صورة حصراً (PNG, JPG, SVG, WebP)"),
-      false,
-    );
-  }
-};
-
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-});
-
-exports.uploadMiddleware = upload.single("logo");
 
 exports.getSettings = catchAsync(async (req, res) => {
   let settings = await SchoolSettings.findOne();
@@ -127,12 +89,21 @@ exports.updateSettings = catchAsync(async (req, res) => {
   return success(res, settings, "تم حفظ إعدادات المدرسة بنجاح");
 });
 
-exports.uploadLogo = catchAsync(async (req, res) => {
-  if (!req.file) {
-    return error(res, "يرجى اختيار ملف الصورة لرفعه", 400);
+/**
+ * PATCH /api/school-settings/logo
+ * Accepts a Cloudinary URL from the frontend and saves it to the DB.
+ * No file upload needed — Cloudinary handles storage directly from browser.
+ */
+exports.updateLogo = catchAsync(async (req, res) => {
+  const { logoUrl } = req.body;
+
+  if (!logoUrl || typeof logoUrl !== "string") {
+    return error(res, "يرجى إرسال رابط الشعار (logoUrl)", 400);
   }
 
-  const logoUrl = `/uploads/${req.file.filename}`;
+  if (!logoUrl.startsWith("http")) {
+    return error(res, "رابط الشعار غير صالح", 400);
+  }
 
   let settings = await SchoolSettings.findOne();
   if (!settings) {
@@ -147,14 +118,10 @@ exports.uploadLogo = catchAsync(async (req, res) => {
     req,
     action: "UPDATE",
     module: "settings",
-    description: "تم رفع وتحديث شعار المدرسة",
+    description: "تم تحديث شعار المدرسة عبر Cloudinary",
     targetId: settings._id,
     targetModel: "SchoolSettings",
   });
 
-  return success(
-    res,
-    { logoUrl, settings },
-    "تم رفع وتحديث شعار المدرسة بنجاح",
-  );
+  return success(res, { logoUrl, settings }, "تم تحديث شعار المدرسة بنجاح");
 });
