@@ -333,31 +333,32 @@ exports.googleAuth = catchAsync(async (req, res) => {
 
 /**
  * Complete profile for new or incomplete teacher account
- * Requires: name, phone, subjectId (from the 11 school subjects)
+ * Requires: name, subjectIds (array of subject ObjectIds)
  */
 exports.completeProfile = catchAsync(async (req, res) => {
   const { name, phone, subjectId, subjectIds } = req.body;
   const user = req.user;
 
   if (!name || !name.trim()) {
-    return error(res, "الاسم الكامل مطلوب.", 400);
+    return error(res, "الاسم الكامل مطلوب لاستخدامه في النظام.", 400);
   }
 
-  if (!phone || !phone.trim()) {
-    return error(res, "رقم الجوال مطلوب للتواصل.", 400);
+  // Collect all selected subject IDs (array or single)
+  let selectedIds = [];
+  if (Array.isArray(subjectIds) && subjectIds.length > 0) {
+    selectedIds = subjectIds.filter(Boolean);
+  } else if (subjectId) {
+    selectedIds = [subjectId];
   }
 
-  const selectedSubjectId =
-    subjectId || (Array.isArray(subjectIds) && subjectIds[0]);
-
-  if (!selectedSubjectId) {
-    return error(res, "يرجى اختيار مادتك الدراسية الأساسية.", 400);
+  if (selectedIds.length === 0) {
+    return error(res, "يرجى اختيار مادة دراسية واحدة على الأقل من المواد التي تدرسها.", 400);
   }
 
   // Validate subject existence
-  const subjectObj = await Subject.findById(selectedSubjectId);
-  if (!subjectObj) {
-    return error(res, "المادة الدراسية المختارة غير صالحة أو غير موجودة.", 404);
+  const validSubjects = await Subject.find({ _id: { $in: selectedIds } });
+  if (validSubjects.length === 0) {
+    return error(res, "المواد الدراسية المختارة غير صالحة.", 400);
   }
 
   const userDoc = await User.findById(user._id);
@@ -366,8 +367,10 @@ exports.completeProfile = catchAsync(async (req, res) => {
   }
 
   userDoc.name = name.trim();
-  userDoc.phone = phone.trim();
-  userDoc.subjects = [selectedSubjectId];
+  if (phone !== undefined) {
+    userDoc.phone = phone ? phone.trim() : "";
+  }
+  userDoc.subjects = validSubjects.map((s) => s._id);
   userDoc.isProfileComplete = true;
 
   await userDoc.save({ validateBeforeSave: false });
@@ -382,11 +385,13 @@ exports.completeProfile = catchAsync(async (req, res) => {
     })
     .populate("subjects", "name nameEn code color");
 
+  const subjectNames = validSubjects.map((s) => s.name).join(" و ");
+
   await createAuditLog({
     req,
     action: "UPDATE",
     module: "users",
-    description: `استكمال وتفعيل بيانات المعلم: ${populatedUser.name} - مادة: ${subjectObj.name} - جوال: ${populatedUser.phone}`,
+    description: `استكمال بيانات المعلم: ${populatedUser.name} - المواد: ${subjectNames}`,
     targetId: populatedUser._id,
     targetModel: "User",
   });
@@ -394,6 +399,6 @@ exports.completeProfile = catchAsync(async (req, res) => {
   return success(
     res,
     populatedUser,
-    `تم استكمال وتفعيل حسابك بنجاح لمادة ${subjectObj.name} ✅`,
+    `مرحباً بك أ. ${populatedUser.name}! تم حفظ موادك الدراسية (${subjectNames}) بنجاح ✅`,
   );
 });
