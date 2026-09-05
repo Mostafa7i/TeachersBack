@@ -84,10 +84,19 @@ exports.getForTeacher = catchAsync(async (req, res) => {
     return error(res, "الأسبوع غير موجود", 404);
   }
 
-  // Find schedules specifically assigned to this teacher for this week
+  const userSubjects = Array.isArray(user.subjects)
+    ? user.subjects.map((s) => (typeof s === "object" && s ? s._id : s)).filter(Boolean)
+    : [];
+
+  const orConditions = [{ teacher: user._id }];
+  if (userSubjects.length > 0) {
+    orConditions.push({ subject: { $in: userSubjects } });
+  }
+
+  // Find schedules assigned to this teacher or matching their subjects for this week
   const schedules = await Schedule.find({
     week: targetWeekId,
-    teacher: user._id,
+    $or: orConditions,
   })
     .populate("subject", "name nameEn code color")
     .populate("teacher", "name email")
