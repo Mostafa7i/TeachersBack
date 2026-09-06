@@ -828,3 +828,195 @@ exports.saveMasterCell = catchAsync(async (req, res) => {
 
   return success(res, populated, "تم تعيين الحصة وحفظها بنجاح ✅");
 });
+
+/**
+ * Helper to extract grade/stage prefix from class names
+ * e.g. "أول أول" -> "أول", "أول/2" -> "أول", "الصف الأول أ" -> "الصف الأول", "1/1" -> "1"
+ */
+const extractGradePrefix = (className) => {
+  if (!className) return "";
+  const cleaned = className.trim();
+
+  // "الصف الأول", "الصف الثاني", ...
+  const fullMatch = cleaned.match(
+    /^(الصف\s+(?:الأول|الثاني|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر|الحادي\s+عشر|الثاني\s+عشر))/i
+  );
+  if (fullMatch) return fullMatch[1];
+
+  // "أولى", "أول", "ثاني", "ثالث", "رابع", "خامس", "سادس", "سابع", "ثامن", "تاسع", "عاشر"
+  const wordMatch = cleaned.match(
+    /^(أولى|أول|ثانية|ثاني|ثالثة|ثالث|رابعة|رابع|خامسة|خامس|سادسة|سادس|سابعة|سابع|ثامنة|ثامن|تاسعة|تاسع|عاشرة|عاشر)/i
+  );
+  if (wordMatch) {
+    const map = {
+      "أولى": "أول",
+      "ثانية": "ثاني",
+      "ثالثة": "ثالث",
+      "رابعة": "رابع",
+      "خامسة": "خامس",
+      "سادسة": "سادس",
+    };
+    return map[wordMatch[1]] || wordMatch[1];
+  }
+
+  // Numbers: "1/1", "1-A", "2/3" -> "1", "2"
+  const numMatch = cleaned.match(/^(\d+)/);
+  if (numMatch) return numMatch[1];
+
+  // Fallback: split by space/slash/dash
+  const parts = cleaned.split(/[\s\/\-_]+/);
+  if (parts.length > 1) return parts[0];
+
+  return cleaned;
+};
+
+/**
+ * POST /api/schedules/bulk-fill-grade
+ * يملأ عنوان الدرس والواجبات تلقائياً لجميع فصول نفس الصف (الفئة)
+ * مثال: "أول أول" → سيملأ "أول ثاني", "أول ثالث"... في نفس الأسبوع أو نفس اليوم
+ */
+exports.bulkFillGrade = catchAsync(async (req, res) => {
+  const {
+    sourceScheduleId,
+    lessonTitle,
+    homework,
+    activities,
+    notes,
+    scope = "week", // "week" | "day"
+  } = req.body;
+
+  if (!sourceScheduleId) {
+    return error(res, "معرف الحصة المصدر مطلوب", 400);
+  }
+
+  const source = await Schedule.findById(sourceScheduleId).populate("subject");
+  if (!source) {
+    return error(res, "الحصة المصدر غير موجودة", 404);
+  }
+
+  const user = req.user;
+  const isSuperAdmin = user.role?.isSystem;
+
+  // Check teacher permission: must teach the source schedule's subject
+  if (!isSuperAdmin) {
+    const userSubjectIds = (user.subjects || []).map((s) =>
+      s._id ? s._id.toString() : s.toString()
+    );
+    const sourceSubId = (source.subject?._id || source.subject || "").toString();
+    if (!userSubjectIds.includes(sourceSubId)) {
+      return error(res, "غير مصرح: المادة غير مسندة إليك", 403);
+    }
+  }
+
+  // Extract grade prefix from className
+  const sourceClassName = (source.className || "").trim();
+  const gradePrefix = extractGradePrefix(sourceClassName);
+
+  if (!gradePrefix) {
+    return error(res, "لا يمكن تحديد الصف الدراسي من اسم الفصل", 400);
+  }
+
+  // Build query for matching target schedules in the same week
+  const query = {
+    week: source.week,
+    _id: { $ne: source._id },
+  };
+
+  // Restrict to same subject
+  if (source.subject) {
+    query.subject = source.subject._id || source.subject;
+  }
+
+  // If teacher (not admin), only touch their own schedules
+  if (!isSuperAdmin) {
+    query.$or = [
+      { teacher: user._id },
+      { subject: source.subject._id || source.subject },
+    ];
+  }
+
+  // If scope is 'day', restrict to the same day
+  if (scope === "day") {
+    query.day = source.day;
+  }
+
+  const candidates = await Schedule.find(query)
+    .populate("subject", "name nameEn code color")
+    .populate("teacher", "name email");
+
+  // Filter candidates that match the same grade prefix
+  const targets = candidates.filter((s) => {
+    const candidateGrade = extractGradePrefix(s.className || "");
+    return candidateGrade && candidateGrade.toLowerCase() === gradePrefix.toLowerCase();
+  });
+
+  if (targets.length === 0) {
+    const scopeLabel = scope === "day" ? `في يوم ${source.day}` : "في هذا الأسبوع";
+    return error(
+      res,
+      `لم يتم العثور على فصول أخرى من صف "${gradePrefix}" ${scopeLabel}`,
+      400
+    );
+  }
+
+  // Update all target schedules
+  const updateOps = targets.map((s) => ({
+    updateOne: {
+      filter: { _id: s._id },
+      update: {
+        $set: {
+          lessonTitle: lessonTitle !== undefined ? lessonTitle : s.lessonTitle,
+          homework: homework !== undefined ? homework : s.homework,
+          activities: activities !== undefined ? activities : s.activities,
+          notes: notes !== undefined ? notes : s.notes,
+          updatedBy: user._id,
+        },
+      },
+    },
+  }));
+
+  await Schedule.bulkWrite(updateOps);
+
+  // Also update the source itself
+  source.lessonTitle = lessonTitle !== undefined ? lessonTitle : source.lessonTitle;
+  source.homework = homework !== undefined ? homework : source.homework;
+  source.activities = activities !== undefined ? activities : source.activities;
+  source.notes = notes !== undefined ? notes : source.notes;
+  source.updatedBy = user._id;
+  await source.save();
+
+  const updatedIds = [source._id, ...targets.map((s) => s._id)];
+  const updatedSchedules = await Schedule.find({ _id: { $in: updatedIds } })
+    .populate("subject", "name code color")
+    .populate("teacher", "name email");
+
+  const targetDetails = targets.map((s) => ({
+    _id: s._id,
+    className: s.className,
+    day: s.day,
+    period: s.period,
+  }));
+
+  await createAuditLog({
+    req,
+    action: "UPDATE",
+    module: "schedules",
+    description: `إملاء تلقائي لصف "${gradePrefix}": تم تحديث ${targets.length + 1} حصة في الأسبوع (${scope === "day" ? `يوم ${source.day}` : "كامل الأسبوع"})`,
+    targetId: source._id,
+    targetModel: "Schedule",
+  });
+
+  return success(
+    res,
+    {
+      updatedCount: updatedSchedules.length,
+      gradePrefix,
+      targetClasses: targets.map((s) => s.className),
+      targetDetails,
+      scope,
+      schedules: updatedSchedules,
+    },
+    `تم إملاء بيانات التحضير لـ ${updatedSchedules.length} حصص من صف "${gradePrefix}" بنجاح ✅`
+  );
+});
+

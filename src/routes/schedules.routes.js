@@ -82,5 +82,14 @@ router.post(
   ]),
   schedulesController.copyWeek,
 );
+router.post(
+  "/bulk-fill-grade",
+  requirePermission([
+    "schedules.edit",
+    "schedules.edit_title",
+    "schedules.edit_homework",
+  ]),
+  schedulesController.bulkFillGrade,
+);
 
 module.exports = router;
