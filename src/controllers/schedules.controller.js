@@ -839,22 +839,22 @@ const extractGradePrefix = (className) => {
 
   // "الصف الأول", "الصف الثاني", ...
   const fullMatch = cleaned.match(
-    /^(الصف\s+(?:الأول|الثاني|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر|الحادي\s+عشر|الثاني\s+عشر))/i
+    /^(الصف\s+(?:الأول|الثاني|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر|الحادي\s+عشر|الثاني\s+عشر))/i,
   );
   if (fullMatch) return fullMatch[1];
 
   // "أولى", "أول", "ثاني", "ثالث", "رابع", "خامس", "سادس", "سابع", "ثامن", "تاسع", "عاشر"
   const wordMatch = cleaned.match(
-    /^(أولى|أول|ثانية|ثاني|ثالثة|ثالث|رابعة|رابع|خامسة|خامس|سادسة|سادس|سابعة|سابع|ثامنة|ثامن|تاسعة|تاسع|عاشرة|عاشر)/i
+    /^(أولى|أول|ثانية|ثاني|ثالثة|ثالث|رابعة|رابع|خامسة|خامس|سادسة|سادس|سابعة|سابع|ثامنة|ثامن|تاسعة|تاسع|عاشرة|عاشر)/i,
   );
   if (wordMatch) {
     const map = {
-      "أولى": "أول",
-      "ثانية": "ثاني",
-      "ثالثة": "ثالث",
-      "رابعة": "رابع",
-      "خامسة": "خامس",
-      "سادسة": "سادس",
+      أولى: "أول",
+      ثانية: "ثاني",
+      ثالثة: "ثالث",
+      رابعة: "رابع",
+      خامسة: "خامس",
+      سادسة: "سادس",
     };
     return map[wordMatch[1]] || wordMatch[1];
   }
@@ -900,9 +900,13 @@ exports.bulkFillGrade = catchAsync(async (req, res) => {
   // Check teacher permission: must teach the source schedule's subject
   if (!isSuperAdmin) {
     const userSubjectIds = (user.subjects || []).map((s) =>
-      s._id ? s._id.toString() : s.toString()
+      s._id ? s._id.toString() : s.toString(),
     );
-    const sourceSubId = (source.subject?._id || source.subject || "").toString();
+    const sourceSubId = (
+      source.subject?._id ||
+      source.subject ||
+      ""
+    ).toString();
     if (!userSubjectIds.includes(sourceSubId)) {
       return error(res, "غير مصرح: المادة غير مسندة إليك", 403);
     }
@@ -947,15 +951,19 @@ exports.bulkFillGrade = catchAsync(async (req, res) => {
   // Filter candidates that match the same grade prefix
   const targets = candidates.filter((s) => {
     const candidateGrade = extractGradePrefix(s.className || "");
-    return candidateGrade && candidateGrade.toLowerCase() === gradePrefix.toLowerCase();
+    return (
+      candidateGrade &&
+      candidateGrade.toLowerCase() === gradePrefix.toLowerCase()
+    );
   });
 
   if (targets.length === 0) {
-    const scopeLabel = scope === "day" ? `في يوم ${source.day}` : "في هذا الأسبوع";
+    const scopeLabel =
+      scope === "day" ? `في يوم ${source.day}` : "في هذا الأسبوع";
     return error(
       res,
       `لم يتم العثور على فصول أخرى من صف "${gradePrefix}" ${scopeLabel}`,
-      400
+      400,
     );
   }
 
@@ -978,7 +986,8 @@ exports.bulkFillGrade = catchAsync(async (req, res) => {
   await Schedule.bulkWrite(updateOps);
 
   // Also update the source itself
-  source.lessonTitle = lessonTitle !== undefined ? lessonTitle : source.lessonTitle;
+  source.lessonTitle =
+    lessonTitle !== undefined ? lessonTitle : source.lessonTitle;
   source.homework = homework !== undefined ? homework : source.homework;
   source.activities = activities !== undefined ? activities : source.activities;
   source.notes = notes !== undefined ? notes : source.notes;
@@ -1016,7 +1025,6 @@ exports.bulkFillGrade = catchAsync(async (req, res) => {
       scope,
       schedules: updatedSchedules,
     },
-    `تم إملاء بيانات التحضير لـ ${updatedSchedules.length} حصص من صف "${gradePrefix}" بنجاح ✅`
+    `تم إملاء بيانات التحضير لـ ${updatedSchedules.length} حصص من صف "${gradePrefix}" بنجاح ✅`,
   );
 });
-
