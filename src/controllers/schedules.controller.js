@@ -1028,3 +1028,218 @@ exports.bulkFillGrade = catchAsync(async (req, res) => {
     `تم إملاء بيانات التحضير لـ ${updatedSchedules.length} حصص من صف "${gradePrefix}" بنجاح ✅`,
   );
 });
+
+/**
+ * GET /api/schedules/available-timetables
+ * Retrieves available / unclaimed timetable profiles in the school
+ */
+exports.getAvailableTimetables = catchAsync(async (req, res) => {
+  const { weekId } = req.query;
+  const currentUserId = req.user?._id?.toString();
+
+  let targetWeekId = weekId;
+  if (!targetWeekId) {
+    const currentWeek = await Week.findOne({ isActive: true }).sort({
+      startDate: -1,
+    });
+    if (!currentWeek) {
+      return error(res, "لا يوجد أسبوع دراسي مسجل", 404);
+    }
+    targetWeekId = currentWeek._id;
+  }
+
+  const week = await Week.findById(targetWeekId);
+  if (!week) {
+    return error(res, "الأسبوع المحدد غير موجود", 404);
+  }
+
+  // Find all schedules in this week that have a teacher assigned
+  const schedules = await Schedule.find({ week: targetWeekId })
+    .populate("subject", "name nameEn code color")
+    .populate(
+      "teacher",
+      "name email googleId isProfileComplete isClaimed isActive role",
+    )
+    .sort({ day: 1, period: 1 });
+
+  // Group schedules by teacher
+  const teacherMap = {};
+
+  schedules.forEach((s) => {
+    if (!s.teacher) return;
+    const t = s.teacher;
+    const tId = t._id.toString();
+
+    // Skip if it is the current user themselves
+    if (tId === currentUserId) return;
+
+    // Skip if teacher is already claimed or has a real active google account completed
+    if (t.isClaimed === true) return;
+    if (t.googleId && t.isProfileComplete === true) return;
+
+    if (!teacherMap[tId]) {
+      teacherMap[tId] = {
+        teacherId: t._id,
+        teacherName: t.name,
+        teacherEmail: t.email,
+        subjectsMap: {},
+        classNamesSet: new Set(),
+        totalClasses: 0,
+        schedules: [],
+      };
+    }
+
+    teacherMap[tId].totalClasses += 1;
+    if (s.className && s.className.trim()) {
+      teacherMap[tId].classNamesSet.add(s.className.trim());
+    }
+    if (s.subject && s.subject._id) {
+      const subId = s.subject._id.toString();
+      teacherMap[tId].subjectsMap[subId] = s.subject;
+    }
+
+    teacherMap[tId].schedules.push({
+      _id: s._id,
+      day: s.day,
+      period: s.period,
+      subject: s.subject,
+      className: s.className || "",
+      room: s.room || "",
+      lessonTitle: s.lessonTitle || "",
+      homework: s.homework || "",
+      activities: s.activities || "",
+      notes: s.notes || "",
+    });
+  });
+
+  const availableTimetables = Object.values(teacherMap).map((t) => ({
+    teacherId: t.teacherId,
+    teacherName: t.teacherName,
+    teacherEmail: t.teacherEmail,
+    subjects: Object.values(t.subjectsMap),
+    classNames: Array.from(t.classNamesSet),
+    totalClasses: t.totalClasses,
+    schedules: t.schedules,
+  }));
+
+  return success(
+    res,
+    {
+      week,
+      timetables: availableTimetables,
+      count: availableTimetables.length,
+    },
+    "تم جلب الجداول المتاحة بنجاح",
+  );
+});
+
+/**
+ * POST /api/schedules/claim-timetable
+ * Allows a teacher to claim an available timetable
+ */
+exports.claimTimetable = catchAsync(async (req, res) => {
+  const { sourceTeacherId, weekId } = req.body;
+  const user = req.user;
+
+  if (!sourceTeacherId) {
+    return error(res, "يرجى تحديد الجدول المراد اختياره", 400);
+  }
+
+  if (sourceTeacherId.toString() === user._id.toString()) {
+    return error(res, "هذا الجدول مسند لحسابك بالفعل", 400);
+  }
+
+  const sourceTeacher = await User.findById(sourceTeacherId).populate(
+    "subjects",
+    "name nameEn code color",
+  );
+
+  if (!sourceTeacher) {
+    return error(res, "الجدول أو المعلم المصدر غير موجود", 404);
+  }
+
+  if (sourceTeacher.isClaimed === true) {
+    return error(res, "تم حجز وتعيين هذا الجدول مسبقاً لمعلم آخر", 409);
+  }
+
+  if (sourceTeacher.googleId && sourceTeacher.isProfileComplete === true) {
+    return error(res, "هذا الجدول مرتبط بحساب معلم نشط ومفعل", 409);
+  }
+
+  // Reassign all schedules belonging to sourceTeacher across ALL weeks to req.user._id
+  const transferResult = await Schedule.updateMany(
+    { teacher: sourceTeacher._id },
+    {
+      $set: {
+        teacher: user._id,
+        updatedBy: user._id,
+      },
+    },
+  );
+
+  // Find distinct subjects in the transferred schedules and sourceTeacher.subjects
+  const schedulesOfUser = await Schedule.find({ teacher: user._id });
+  const transferredSubjectIds = new Set(
+    schedulesOfUser.map((s) => s.subject.toString()),
+  );
+
+  (sourceTeacher.subjects || []).forEach((sub) => {
+    const sId = (sub._id || sub).toString();
+    transferredSubjectIds.add(sId);
+  });
+
+  (user.subjects || []).forEach((sub) => {
+    const sId = (sub._id || sub).toString();
+    transferredSubjectIds.add(sId);
+  });
+
+  // Update req.user document
+  const userDoc = await User.findById(user._id);
+  userDoc.subjects = Array.from(transferredSubjectIds);
+  userDoc.isProfileComplete = true;
+
+  if (
+    (!userDoc.name || userDoc.name === "معلم جديد") &&
+    sourceTeacher.name &&
+    !sourceTeacher.name.includes("معلم جديد")
+  ) {
+    userDoc.name = sourceTeacher.name;
+  }
+
+  await userDoc.save({ validateBeforeSave: false });
+
+  // Mark sourceTeacher as claimed
+  sourceTeacher.isClaimed = true;
+  sourceTeacher.claimedBy = user._id;
+  sourceTeacher.isActive = false;
+  await sourceTeacher.save({ validateBeforeSave: false });
+
+  const populatedUser = await User.findById(user._id)
+    .populate({
+      path: "role",
+      populate: {
+        path: "permissions",
+        select: "name module action description",
+      },
+    })
+    .populate("subjects", "name nameEn code color");
+
+  await createAuditLog({
+    req,
+    action: "UPDATE",
+    module: "schedules",
+    description: `قام المعلم ${populatedUser.name} باختيار وتعيين جدول (${sourceTeacher.name}) لحسابه بنجاح (${transferResult.modifiedCount} حصة).`,
+    targetId: populatedUser._id,
+    targetModel: "User",
+  });
+
+  return success(
+    res,
+    {
+      user: populatedUser,
+      transferredCount: transferResult.modifiedCount,
+    },
+    `تم تعيين وتثبيت جدول (${sourceTeacher.name}) لحسابك بنجاح 🎉 (${transferResult.modifiedCount} حصة)`,
+  );
+});
+

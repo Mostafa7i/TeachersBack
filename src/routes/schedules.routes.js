@@ -27,6 +27,8 @@ router.get(
   schedulesController.getWeeklyPlanCompletion,
 );
 router.get("/teacher/me", schedulesController.getForTeacher);
+router.get("/available-timetables", schedulesController.getAvailableTimetables);
+router.post("/claim-timetable", schedulesController.claimTimetable);
 router.get(
   "/teacher-timetable/:teacherId",
   requirePermission(["schedules.view", "schedules.edit", "users.view"]),
