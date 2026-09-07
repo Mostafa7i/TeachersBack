@@ -196,19 +196,30 @@ exports.remove = catchAsync(async (req, res) => {
     }
   }
 
+  // 1. Unclaim any timetable templates claimed by this user
+  const TimetableTemplate = require("../models/TimetableTemplate.model");
+  await TimetableTemplate.updateMany(
+    { claimedBy: req.params.id },
+    { $set: { isClaimed: false, claimedBy: null, claimedAt: null } }
+  );
+
+  // 2. Remove any schedule entries assigned to this teacher
+  const Schedule = require("../models/Schedule.model");
+  await Schedule.deleteMany({ teacher: req.params.id });
+
   await User.findByIdAndDelete(req.params.id);
 
   await createAuditLog({
     req,
     action: "DELETE",
     module: "users",
-    description: `حذف المستخدم: ${user.name} (${user.email})`,
+    description: `حذف المستخدم: ${user.name} (${user.email}) وتحرير أي جداول شاغرة كانت مخصصة له`,
     targetId: user._id,
     targetModel: "User",
     oldValue: user,
   });
 
-  return success(res, null, "تم حذف المستخدم بنجاح");
+  return success(res, null, "تم حذف المستخدم بنجاح وإتاحة جداوله الشاغرة مجدداً");
 });
 
 exports.toggleStatus = catchAsync(async (req, res) => {

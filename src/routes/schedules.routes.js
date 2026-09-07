@@ -118,6 +118,11 @@ router.post(
   requirePermission(["schedules.create", "schedules.edit"]),
   schedulesController.assignTemplateToTeacher,
 );
+router.post(
+  "/templates/:id/unclaim",
+  requirePermission(["schedules.create", "schedules.edit"]),
+  schedulesController.unclaimTemplate,
+);
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 3. GENERIC ROOT & PARAMETER ROUTES (/:id) - MUST BE LAST

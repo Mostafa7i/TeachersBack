@@ -1480,10 +1480,32 @@ exports.createTemplate = catchAsync(async (req, res) => {
 
 /**
  * GET /api/schedules/templates
- * Get all active unclaimed timetable templates
+ * Get all active unclaimed timetable templates (with auto-heal for deleted users)
  */
 exports.getTemplates = catchAsync(async (req, res) => {
   const { includeAll, includeClaimed } = req.query;
+
+  // Auto-heal: Check any template marked as claimed where the user was deleted
+  const claimedTemplates = await TimetableTemplate.find({ isClaimed: true });
+  if (claimedTemplates.length > 0) {
+    const User = require('../models/User.model');
+    for (const t of claimedTemplates) {
+      if (!t.claimedBy) {
+        t.isClaimed = false;
+        t.claimedBy = null;
+        t.claimedAt = null;
+        await t.save();
+      } else {
+        const userExists = await User.findById(t.claimedBy);
+        if (!userExists) {
+          t.isClaimed = false;
+          t.claimedBy = null;
+          t.claimedAt = null;
+          await t.save();
+        }
+      }
+    }
+  }
 
   const filter = { isActive: true };
   if (includeAll !== 'true' && includeClaimed !== 'true') {
@@ -1568,12 +1590,20 @@ exports.saveTemplateEntries = catchAsync(async (req, res) => {
 
 /**
  * DELETE /api/schedules/templates/:id
- * Admin deletes a vacant template (only if not claimed)
+ * Admin deletes a vacant template
  */
 exports.deleteTemplate = catchAsync(async (req, res) => {
   const template = await TimetableTemplate.findById(req.params.id);
   if (!template) return error(res, 'الجدول الشاغر غير موجود', 404);
-  if (template.isClaimed) return error(res, 'لا يمكن حذف جدول تم اختياره من معلم', 400);
+
+  // If claimed, check if claimedBy user exists
+  if (template.isClaimed && template.claimedBy) {
+    const User = require('../models/User.model');
+    const userExists = await User.findById(template.claimedBy);
+    if (userExists) {
+      return error(res, 'لا يمكن حذف جدول تم اختياره من معلم مسجل. يرجى إلغاء تعيينه أولاً.', 400);
+    }
+  }
 
   await TimetableTemplate.deleteOne({ _id: template._id });
 
@@ -1780,5 +1810,35 @@ exports.assignTemplateToTeacher = catchAsync(async (req, res) => {
     { targetTeacher, schedulesCreated: scheduleOps.length },
     `تم تعيين الجدول "${template.name}" للمعلم ${targetTeacher.name} بنجاح ✅`
   );
+});
+
+/**
+ * POST /api/schedules/templates/:id/unclaim
+ * Admin unclaims / releases a template so it becomes available for new teachers
+ */
+exports.unclaimTemplate = catchAsync(async (req, res) => {
+  const template = await TimetableTemplate.findById(req.params.id);
+  if (!template) return error(res, 'الجدول الشاغر غير موجود', 404);
+
+  const prevClaimedBy = template.claimedBy;
+  template.isClaimed = false;
+  template.claimedBy = null;
+  template.claimedAt = null;
+  await template.save();
+
+  await createAuditLog({
+    req,
+    action: 'UPDATE',
+    module: 'schedules',
+    description: `قام المشرف ${req.user.name} بإلغاء تعيين الجدول "${template.name}" وإتاحته كشاغر مجدداً`,
+    targetId: template._id,
+    targetModel: 'TimetableTemplate',
+  });
+
+  const populated = await TimetableTemplate.findById(template._id)
+    .populate('subjects', 'name code color')
+    .populate('createdBy', 'name');
+
+  return success(res, populated, `تم إلغاء تعيين الجدول "${template.name}" وأصبح متاحاً للاختيار بنجاح ✅`);
 });
 
