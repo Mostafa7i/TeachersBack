@@ -1602,7 +1602,16 @@ exports.claimTemplate = catchAsync(async (req, res) => {
 
   if (!template) return error(res, 'الجدول الشاغر غير موجود', 404);
   if (!template.isActive) return error(res, 'هذا الجدول غير نشط', 400);
-  if (template.isClaimed) return error(res, 'تم اختيار هذا الجدول من قِبَل معلم آخر', 409);
+  if (template.isClaimed) {
+    if (template.claimedBy && template.claimedBy.toString() === teacher._id.toString()) {
+      return success(
+        res,
+        { template, alreadyClaimed: true },
+        `تم اختيار الجدول "${template.name}" بنجاح مسبقاً لحسابك ✅`
+      );
+    }
+    return error(res, 'تم اختيار هذا الجدول من قِبَل معلم آخر', 409);
+  }
 
   // Resolve week
   let week = null;
