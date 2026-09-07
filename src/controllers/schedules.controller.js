@@ -2,6 +2,7 @@ const Schedule = require("../models/Schedule.model");
 const Week = require("../models/Week.model");
 const Subject = require("../models/Subject.model");
 const User = require("../models/User.model");
+const Role = require("../models/Role.model");
 const catchAsync = require("../utils/catchAsync");
 const { success, error } = require("../utils/apiResponse");
 const { createAuditLog } = require("../middleware/auditLog.middleware");
@@ -1366,5 +1367,55 @@ exports.toggleTimetableClaimed = catchAsync(async (req, res) => {
     teacher,
     `تم تحديث حالة الجدول للمعلم (${teacher.name}) إلى: ${teacher.isClaimed ? "معين ومحجوز 🔒" : "شاغر ومتاح للاختيار 🟢"}`,
   );
+});
+
+/**
+ * POST /api/schedules/create-vacant-slot
+ * Admin creates a new placeholder teacher (vacant timetable slot)
+ * Role is resolved automatically from the database (no need to pass from frontend)
+ */
+exports.createVacantSlot = catchAsync(async (req, res) => {
+  const { name, subjectId } = req.body;
+
+  if (!name || !name.trim()) {
+    return error(res, 'اسم الجدول / الشاغر مطلوب (مثال: معلم رياضيات - شاغر 1)', 400);
+  }
+
+  // Find teacher role automatically
+  const teacherRole = await Role.findOne({
+    name: { $regex: /معلم|teacher/i },
+  });
+
+  if (!teacherRole) {
+    return error(res, 'لم يتم العثور على دور المعلم في النظام. يرجى إنشاء دور باسم "معلم" أولاً', 400);
+  }
+
+  const cleanEmail = 'slot_' + Date.now() + '_' + Math.floor(Math.random() * 9999) + '@school.local';
+  const cleanPassword = 'Temp@' + Math.floor(100000 + Math.random() * 900000);
+
+  const newTeacher = await User.create({
+    name: name.trim(),
+    email: cleanEmail,
+    password: cleanPassword,
+    role: teacherRole._id,
+    subjects: subjectId ? [subjectId] : [],
+    isActive: true,
+    isClaimed: false,
+  });
+
+  await createAuditLog({
+    req,
+    action: 'CREATE',
+    module: 'schedules',
+    description: `قام المشرف ${req.user.name} بإنشاء جدول شاغر جديد: ${newTeacher.name}`,
+    targetId: newTeacher._id,
+    targetModel: 'User',
+  });
+
+  const populated = await User.findById(newTeacher._id)
+    .populate('role', 'name description')
+    .populate('subjects', 'name code color');
+
+  return success(res, populated, `تم إنشاء الجدول الشاغر (${newTeacher.name}) بنجاح ✅`, 201);
 });
 

@@ -55,6 +55,12 @@ router.post(
   schedulesController.saveMasterCell,
 );
 
+router.post(
+  "/create-vacant-slot",
+  requirePermission(["schedules.create", "schedules.edit"]),
+  schedulesController.createVacantSlot,
+);
+
 router.get(
   "/:id",
   requirePermission("schedules.view"),
