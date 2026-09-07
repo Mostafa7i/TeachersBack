@@ -16,6 +16,10 @@ const scheduleValidation = [
   body("subject").notEmpty().withMessage("المادة مطلوبة"),
 ];
 
+// ═════════════════════════════════════════════════════════════════════════════
+// 1. SPECIFIC / STATIC ROUTES (Must come before parameter routes like /:id)
+// ═════════════════════════════════════════════════════════════════════════════
+
 router.get(
   "/week/:weekId",
   requirePermission(["schedules.view", "schedules.edit"]),
@@ -54,12 +58,70 @@ router.post(
   requirePermission(["schedules.create", "schedules.edit"]),
   schedulesController.saveMasterCell,
 );
-
 router.post(
-  "/create-vacant-slot",
-  requirePermission(["schedules.create", "schedules.edit"]),
-  schedulesController.createVacantSlot,
+  "/copy-week",
+  requirePermission([
+    "schedules.create",
+    "schedules.copy_week",
+    "schedules.edit",
+  ]),
+  schedulesController.copyWeek,
 );
+router.post(
+  "/bulk-fill-grade",
+  requirePermission([
+    "schedules.edit",
+    "schedules.edit_title",
+    "schedules.edit_homework",
+  ]),
+  schedulesController.bulkFillGrade,
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 2. TIMETABLE TEMPLATES (Vacant Slots) ROUTES
+// ═════════════════════════════════════════════════════════════════════════════
+
+router.get(
+  "/templates",
+  schedulesController.getTemplates,
+);
+router.post(
+  "/templates",
+  requirePermission(["schedules.create", "schedules.edit"]),
+  schedulesController.createTemplate,
+);
+router.get(
+  "/templates/:id",
+  schedulesController.getTemplateById,
+);
+router.put(
+  "/templates/:id",
+  requirePermission(["schedules.create", "schedules.edit"]),
+  schedulesController.updateTemplate,
+);
+router.put(
+  "/templates/:id/entries",
+  requirePermission(["schedules.create", "schedules.edit"]),
+  schedulesController.saveTemplateEntries,
+);
+router.delete(
+  "/templates/:id",
+  requirePermission(["schedules.create", "schedules.edit"]),
+  schedulesController.deleteTemplate,
+);
+router.post(
+  "/templates/:id/claim",
+  schedulesController.claimTemplate,
+);
+router.post(
+  "/templates/:id/assign",
+  requirePermission(["schedules.create", "schedules.edit"]),
+  schedulesController.assignTemplateToTeacher,
+);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 3. GENERIC ROOT & PARAMETER ROUTES (/:id) - MUST BE LAST
+// ═════════════════════════════════════════════════════════════════════════════
 
 router.get(
   "/:id",
@@ -90,64 +152,6 @@ router.delete(
   "/:id",
   requirePermission("schedules.delete"),
   schedulesController.remove,
-);
-router.post(
-  "/copy-week",
-  requirePermission([
-    "schedules.create",
-    "schedules.copy_week",
-    "schedules.edit",
-  ]),
-  schedulesController.copyWeek,
-);
-router.post(
-  "/bulk-fill-grade",
-  requirePermission([
-    "schedules.edit",
-    "schedules.edit_title",
-    "schedules.edit_homework",
-  ]),
-  schedulesController.bulkFillGrade,
-);
-
-
-// ── Timetable Templates (Vacant Slots) ───────────────────────────────────────
-router.get(
-  '/templates',
-  schedulesController.getTemplates,
-);
-router.post(
-  '/templates',
-  requirePermission(['schedules.create', 'schedules.edit']),
-  schedulesController.createTemplate,
-);
-router.get(
-  '/templates/:id',
-  schedulesController.getTemplateById,
-);
-router.put(
-  '/templates/:id',
-  requirePermission(['schedules.create', 'schedules.edit']),
-  schedulesController.updateTemplate,
-);
-router.put(
-  '/templates/:id/entries',
-  requirePermission(['schedules.create', 'schedules.edit']),
-  schedulesController.saveTemplateEntries,
-);
-router.delete(
-  '/templates/:id',
-  requirePermission(['schedules.create', 'schedules.edit']),
-  schedulesController.deleteTemplate,
-);
-router.post(
-  '/templates/:id/claim',
-  schedulesController.claimTemplate,
-);
-router.post(
-  '/templates/:id/assign',
-  requirePermission(['schedules.create', 'schedules.edit']),
-  schedulesController.assignTemplateToTeacher,
 );
 
 module.exports = router;
