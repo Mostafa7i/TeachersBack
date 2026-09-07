@@ -81,19 +81,13 @@ router.post(
 // 2. TIMETABLE TEMPLATES (Vacant Slots) ROUTES
 // ═════════════════════════════════════════════════════════════════════════════
 
-router.get(
-  "/templates",
-  schedulesController.getTemplates,
-);
+router.get("/templates", schedulesController.getTemplates);
 router.post(
   "/templates",
   requirePermission(["schedules.create", "schedules.edit"]),
   schedulesController.createTemplate,
 );
-router.get(
-  "/templates/:id",
-  schedulesController.getTemplateById,
-);
+router.get("/templates/:id", schedulesController.getTemplateById);
 router.put(
   "/templates/:id",
   requirePermission(["schedules.create", "schedules.edit"]),
@@ -109,10 +103,7 @@ router.delete(
   requirePermission(["schedules.create", "schedules.edit"]),
   schedulesController.deleteTemplate,
 );
-router.post(
-  "/templates/:id/claim",
-  schedulesController.claimTemplate,
-);
+router.post("/templates/:id/claim", schedulesController.claimTemplate);
 router.post(
   "/templates/:id/assign",
   requirePermission(["schedules.create", "schedules.edit"]),

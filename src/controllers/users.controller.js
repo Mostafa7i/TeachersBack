@@ -200,7 +200,7 @@ exports.remove = catchAsync(async (req, res) => {
   const TimetableTemplate = require("../models/TimetableTemplate.model");
   await TimetableTemplate.updateMany(
     { claimedBy: req.params.id },
-    { $set: { isClaimed: false, claimedBy: null, claimedAt: null } }
+    { $set: { isClaimed: false, claimedBy: null, claimedAt: null } },
   );
 
   // 2. Remove any schedule entries assigned to this teacher
@@ -219,7 +219,11 @@ exports.remove = catchAsync(async (req, res) => {
     oldValue: user,
   });
 
-  return success(res, null, "تم حذف المستخدم بنجاح وإتاحة جداوله الشاغرة مجدداً");
+  return success(
+    res,
+    null,
+    "تم حذف المستخدم بنجاح وإتاحة جداوله الشاغرة مجدداً",
+  );
 });
 
 exports.toggleStatus = catchAsync(async (req, res) => {

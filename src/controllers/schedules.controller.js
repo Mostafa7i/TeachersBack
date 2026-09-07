@@ -1450,7 +1450,7 @@ exports.createTemplate = catchAsync(async (req, res) => {
   const { name, subjects } = req.body;
 
   if (!name || !name.trim()) {
-    return error(res, 'اسم الجدول / الشاغر مطلوب', 400);
+    return error(res, "اسم الجدول / الشاغر مطلوب", 400);
   }
 
   const template = await TimetableTemplate.create({
@@ -1463,19 +1463,24 @@ exports.createTemplate = catchAsync(async (req, res) => {
   });
 
   const populated = await TimetableTemplate.findById(template._id)
-    .populate('subjects', 'name code color')
-    .populate('createdBy', 'name');
+    .populate("subjects", "name code color")
+    .populate("createdBy", "name");
 
   await createAuditLog({
     req,
-    action: 'CREATE',
-    module: 'schedules',
+    action: "CREATE",
+    module: "schedules",
     description: `أنشأ المشرف ${req.user.name} جدولاً شاغراً جديداً: "${template.name}"`,
     targetId: template._id,
-    targetModel: 'TimetableTemplate',
+    targetModel: "TimetableTemplate",
   });
 
-  return success(res, populated, `تم إنشاء الجدول الشاغر "${template.name}" بنجاح ✅`, 201);
+  return success(
+    res,
+    populated,
+    `تم إنشاء الجدول الشاغر "${template.name}" بنجاح ✅`,
+    201,
+  );
 });
 
 /**
@@ -1488,7 +1493,7 @@ exports.getTemplates = catchAsync(async (req, res) => {
   // Auto-heal: Check any template marked as claimed where the user was deleted
   const claimedTemplates = await TimetableTemplate.find({ isClaimed: true });
   if (claimedTemplates.length > 0) {
-    const User = require('../models/User.model');
+    const User = require("../models/User.model");
     for (const t of claimedTemplates) {
       if (!t.claimedBy) {
         t.isClaimed = false;
@@ -1508,17 +1513,17 @@ exports.getTemplates = catchAsync(async (req, res) => {
   }
 
   const filter = { isActive: true };
-  if (includeAll !== 'true' && includeClaimed !== 'true') {
+  if (includeAll !== "true" && includeClaimed !== "true") {
     filter.isClaimed = false;
   }
 
   const templates = await TimetableTemplate.find(filter)
-    .populate('subjects', 'name code color')
-    .populate('claimedBy', 'name email')
-    .populate('createdBy', 'name')
+    .populate("subjects", "name code color")
+    .populate("claimedBy", "name email")
+    .populate("createdBy", "name")
     .sort({ createdAt: -1 });
 
-  return success(res, templates, 'تم جلب الجداول الشاغرة بنجاح');
+  return success(res, templates, "تم جلب الجداول الشاغرة بنجاح");
 });
 
 /**
@@ -1527,16 +1532,16 @@ exports.getTemplates = catchAsync(async (req, res) => {
  */
 exports.getTemplateById = catchAsync(async (req, res) => {
   const template = await TimetableTemplate.findById(req.params.id)
-    .populate('subjects', 'name code color')
-    .populate('entries.subject', 'name code color')
-    .populate('claimedBy', 'name email')
-    .populate('createdBy', 'name');
+    .populate("subjects", "name code color")
+    .populate("entries.subject", "name code color")
+    .populate("claimedBy", "name email")
+    .populate("createdBy", "name");
 
   if (!template) {
-    return error(res, 'الجدول الشاغر غير موجود', 404);
+    return error(res, "الجدول الشاغر غير موجود", 404);
   }
 
-  return success(res, template, 'تم جلب الجدول الشاغر بنجاح');
+  return success(res, template, "تم جلب الجدول الشاغر بنجاح");
 });
 
 /**
@@ -1547,17 +1552,20 @@ exports.updateTemplate = catchAsync(async (req, res) => {
   const { name, subjects } = req.body;
 
   const template = await TimetableTemplate.findById(req.params.id);
-  if (!template) return error(res, 'الجدول الشاغر غير موجود', 404);
-  if (template.isClaimed) return error(res, 'لا يمكن تعديل جدول تم اختياره من معلم', 400);
+  if (!template) return error(res, "الجدول الشاغر غير موجود", 404);
+  if (template.isClaimed)
+    return error(res, "لا يمكن تعديل جدول تم اختياره من معلم", 400);
 
   if (name) template.name = name.trim();
   if (subjects !== undefined) template.subjects = subjects;
   await template.save();
 
-  const populated = await TimetableTemplate.findById(template._id)
-    .populate('subjects', 'name code color');
+  const populated = await TimetableTemplate.findById(template._id).populate(
+    "subjects",
+    "name code color",
+  );
 
-  return success(res, populated, 'تم تحديث الجدول الشاغر بنجاح');
+  return success(res, populated, "تم تحديث الجدول الشاغر بنجاح");
 });
 
 /**
@@ -1568,24 +1576,25 @@ exports.saveTemplateEntries = catchAsync(async (req, res) => {
   const { entries } = req.body;
 
   const template = await TimetableTemplate.findById(req.params.id);
-  if (!template) return error(res, 'الجدول الشاغر غير موجود', 404);
-  if (template.isClaimed) return error(res, 'لا يمكن تعديل جدول تم اختياره من معلم', 400);
+  if (!template) return error(res, "الجدول الشاغر غير موجود", 404);
+  if (template.isClaimed)
+    return error(res, "لا يمكن تعديل جدول تم اختياره من معلم", 400);
 
   template.entries = (entries || []).map((e) => ({
     day: e.day,
     period: Number(e.period),
     subject: e.subject || null,
-    className: e.className || '',
-    room: e.room || '',
+    className: e.className || "",
+    room: e.room || "",
   }));
 
   await template.save();
 
   const populated = await TimetableTemplate.findById(template._id)
-    .populate('entries.subject', 'name code color')
-    .populate('subjects', 'name code color');
+    .populate("entries.subject", "name code color")
+    .populate("subjects", "name code color");
 
-  return success(res, populated, 'تم حفظ حصص الجدول الشاغر بنجاح ✅');
+  return success(res, populated, "تم حفظ حصص الجدول الشاغر بنجاح ✅");
 });
 
 /**
@@ -1594,14 +1603,18 @@ exports.saveTemplateEntries = catchAsync(async (req, res) => {
  */
 exports.deleteTemplate = catchAsync(async (req, res) => {
   const template = await TimetableTemplate.findById(req.params.id);
-  if (!template) return error(res, 'الجدول الشاغر غير موجود', 404);
+  if (!template) return error(res, "الجدول الشاغر غير موجود", 404);
 
   // If claimed, check if claimedBy user exists
   if (template.isClaimed && template.claimedBy) {
-    const User = require('../models/User.model');
+    const User = require("../models/User.model");
     const userExists = await User.findById(template.claimedBy);
     if (userExists) {
-      return error(res, 'لا يمكن حذف جدول تم اختياره من معلم مسجل. يرجى إلغاء تعيينه أولاً.', 400);
+      return error(
+        res,
+        "لا يمكن حذف جدول تم اختياره من معلم مسجل. يرجى إلغاء تعيينه أولاً.",
+        400,
+      );
     }
   }
 
@@ -1609,11 +1622,11 @@ exports.deleteTemplate = catchAsync(async (req, res) => {
 
   await createAuditLog({
     req,
-    action: 'DELETE',
-    module: 'schedules',
+    action: "DELETE",
+    module: "schedules",
     description: `حذف المشرف ${req.user.name} الجدول الشاغر: "${template.name}"`,
     targetId: template._id,
-    targetModel: 'TimetableTemplate',
+    targetModel: "TimetableTemplate",
   });
 
   return success(res, null, `تم حذف الجدول الشاغر "${template.name}" بنجاح`);
@@ -1627,20 +1640,25 @@ exports.claimTemplate = catchAsync(async (req, res) => {
   const { weekId } = req.body;
   const teacher = req.user;
 
-  const template = await TimetableTemplate.findById(req.params.id)
-    .populate('entries.subject', '_id');
+  const template = await TimetableTemplate.findById(req.params.id).populate(
+    "entries.subject",
+    "_id",
+  );
 
-  if (!template) return error(res, 'الجدول الشاغر غير موجود', 404);
-  if (!template.isActive) return error(res, 'هذا الجدول غير نشط', 400);
+  if (!template) return error(res, "الجدول الشاغر غير موجود", 404);
+  if (!template.isActive) return error(res, "هذا الجدول غير نشط", 400);
   if (template.isClaimed) {
-    if (template.claimedBy && template.claimedBy.toString() === teacher._id.toString()) {
+    if (
+      template.claimedBy &&
+      template.claimedBy.toString() === teacher._id.toString()
+    ) {
       return success(
         res,
         { template, alreadyClaimed: true },
-        `تم اختيار الجدول "${template.name}" بنجاح مسبقاً لحسابك ✅`
+        `تم اختيار الجدول "${template.name}" بنجاح مسبقاً لحسابك ✅`,
       );
     }
-    return error(res, 'تم اختيار هذا الجدول من قِبَل معلم آخر', 409);
+    return error(res, "تم اختيار هذا الجدول من قِبَل معلم آخر", 409);
   }
 
   // Resolve week
@@ -1652,12 +1670,18 @@ exports.claimTemplate = catchAsync(async (req, res) => {
     week = await Week.findOne({ isActive: true }).sort({ startDate: -1 });
   }
   if (!week) {
-    return error(res, 'لا يوجد أسبوع نشط لتعيين الحصص عليه', 404);
+    return error(res, "لا يوجد أسبوع نشط لتعيين الحصص عليه", 404);
   }
 
   // Get week day dates
   const dayDatesMap = {};
-  const DAY_NAMES_ORDERED = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+  const DAY_NAMES_ORDERED = [
+    "الأحد",
+    "الإثنين",
+    "الثلاثاء",
+    "الأربعاء",
+    "الخميس",
+  ];
   const weekStart = new Date(week.startDate);
   DAY_NAMES_ORDERED.forEach((d, i) => {
     const date = new Date(weekStart);
@@ -1684,8 +1708,8 @@ exports.claimTemplate = catchAsync(async (req, res) => {
             dayDate,
             subject: entry.subject?._id || entry.subject,
             teacher: teacher._id,
-            className: entry.className || '',
-            room: entry.room || '',
+            className: entry.className || "",
+            room: entry.room || "",
             createdBy: teacher._id,
           },
         },
@@ -1699,11 +1723,13 @@ exports.claimTemplate = catchAsync(async (req, res) => {
   }
 
   // Merge subjects into teacher profile
-  const User = require('../models/User.model');
+  const User = require("../models/User.model");
   const teacherDoc = await User.findById(teacher._id);
   const templateSubjects = template.subjects.map((s) => s.toString());
   const existingSubjects = (teacherDoc.subjects || []).map((s) => s.toString());
-  const mergedSubjects = [...new Set([...existingSubjects, ...templateSubjects])];
+  const mergedSubjects = [
+    ...new Set([...existingSubjects, ...templateSubjects]),
+  ];
   teacherDoc.subjects = mergedSubjects;
   teacherDoc.isProfileComplete = true;
   await teacherDoc.save({ validateBeforeSave: false });
@@ -1716,17 +1742,17 @@ exports.claimTemplate = catchAsync(async (req, res) => {
 
   await createAuditLog({
     req,
-    action: 'UPDATE',
-    module: 'schedules',
+    action: "UPDATE",
+    module: "schedules",
     description: `اختار المعلم ${teacher.name} الجدول الشاغر "${template.name}" وتم إنشاء ${scheduleOps.length} حصة.`,
     targetId: template._id,
-    targetModel: 'TimetableTemplate',
+    targetModel: "TimetableTemplate",
   });
 
   return success(
     res,
     { template, schedulesCreated: scheduleOps.length, week },
-    `تم اختيار الجدول "${template.name}" بنجاح ✅ — تم إنشاء ${scheduleOps.length} حصة في الأسبوع الحالي`
+    `تم اختيار الجدول "${template.name}" بنجاح ✅ — تم إنشاء ${scheduleOps.length} حصة في الأسبوع الحالي`,
   );
 });
 
@@ -1737,24 +1763,33 @@ exports.claimTemplate = catchAsync(async (req, res) => {
 exports.assignTemplateToTeacher = catchAsync(async (req, res) => {
   const { teacherId, weekId } = req.body;
 
-  const template = await TimetableTemplate.findById(req.params.id)
-    .populate('entries.subject', '_id');
+  const template = await TimetableTemplate.findById(req.params.id).populate(
+    "entries.subject",
+    "_id",
+  );
 
-  if (!template) return error(res, 'الجدول الشاغر غير موجود', 404);
-  if (template.isClaimed) return error(res, 'تم اختيار هذا الجدول مسبقاً', 409);
+  if (!template) return error(res, "الجدول الشاغر غير موجود", 404);
+  if (template.isClaimed) return error(res, "تم اختيار هذا الجدول مسبقاً", 409);
 
-  const User = require('../models/User.model');
+  const User = require("../models/User.model");
   const targetTeacher = await User.findById(teacherId);
-  if (!targetTeacher) return error(res, 'المعلم المستهدف غير موجود', 404);
+  if (!targetTeacher) return error(res, "المعلم المستهدف غير موجود", 404);
 
   // Resolve week
   let week = null;
   if (weekId) week = await Week.findById(weekId);
-  if (!week) week = await Week.findOne({ isActive: true }).sort({ startDate: -1 });
-  if (!week) return error(res, 'لا يوجد أسبوع نشط', 404);
+  if (!week)
+    week = await Week.findOne({ isActive: true }).sort({ startDate: -1 });
+  if (!week) return error(res, "لا يوجد أسبوع نشط", 404);
 
   const weekStart = new Date(week.startDate);
-  const DAY_NAMES_ORDERED = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+  const DAY_NAMES_ORDERED = [
+    "الأحد",
+    "الإثنين",
+    "الثلاثاء",
+    "الأربعاء",
+    "الخميس",
+  ];
   const dayDatesMap = {};
   DAY_NAMES_ORDERED.forEach((d, i) => {
     const date = new Date(weekStart);
@@ -1764,7 +1799,12 @@ exports.assignTemplateToTeacher = catchAsync(async (req, res) => {
 
   const scheduleOps = template.entries.map((entry) => ({
     updateOne: {
-      filter: { week: week._id, day: entry.day, period: entry.period, teacher: targetTeacher._id },
+      filter: {
+        week: week._id,
+        day: entry.day,
+        period: entry.period,
+        teacher: targetTeacher._id,
+      },
       update: {
         $set: {
           week: week._id,
@@ -1773,8 +1813,8 @@ exports.assignTemplateToTeacher = catchAsync(async (req, res) => {
           dayDate: dayDatesMap[entry.day] || weekStart,
           subject: entry.subject?._id || entry.subject,
           teacher: targetTeacher._id,
-          className: entry.className || '',
-          room: entry.room || '',
+          className: entry.className || "",
+          room: entry.room || "",
           createdBy: req.user._id,
         },
       },
@@ -1786,8 +1826,12 @@ exports.assignTemplateToTeacher = catchAsync(async (req, res) => {
 
   // Merge subjects
   const templateSubjects = template.subjects.map((s) => s.toString());
-  const existingSubjects = (targetTeacher.subjects || []).map((s) => s.toString());
-  targetTeacher.subjects = [...new Set([...existingSubjects, ...templateSubjects])];
+  const existingSubjects = (targetTeacher.subjects || []).map((s) =>
+    s.toString(),
+  );
+  targetTeacher.subjects = [
+    ...new Set([...existingSubjects, ...templateSubjects]),
+  ];
   await targetTeacher.save({ validateBeforeSave: false });
 
   // Mark claimed
@@ -1798,17 +1842,17 @@ exports.assignTemplateToTeacher = catchAsync(async (req, res) => {
 
   await createAuditLog({
     req,
-    action: 'UPDATE',
-    module: 'schedules',
+    action: "UPDATE",
+    module: "schedules",
     description: `عيّن المشرف ${req.user.name} الجدول "${template.name}" للمعلم ${targetTeacher.name} (${scheduleOps.length} حصة)`,
     targetId: template._id,
-    targetModel: 'TimetableTemplate',
+    targetModel: "TimetableTemplate",
   });
 
   return success(
     res,
     { targetTeacher, schedulesCreated: scheduleOps.length },
-    `تم تعيين الجدول "${template.name}" للمعلم ${targetTeacher.name} بنجاح ✅`
+    `تم تعيين الجدول "${template.name}" للمعلم ${targetTeacher.name} بنجاح ✅`,
   );
 });
 
@@ -1818,7 +1862,7 @@ exports.assignTemplateToTeacher = catchAsync(async (req, res) => {
  */
 exports.unclaimTemplate = catchAsync(async (req, res) => {
   const template = await TimetableTemplate.findById(req.params.id);
-  if (!template) return error(res, 'الجدول الشاغر غير موجود', 404);
+  if (!template) return error(res, "الجدول الشاغر غير موجود", 404);
 
   const prevClaimedBy = template.claimedBy;
   template.isClaimed = false;
@@ -1828,17 +1872,20 @@ exports.unclaimTemplate = catchAsync(async (req, res) => {
 
   await createAuditLog({
     req,
-    action: 'UPDATE',
-    module: 'schedules',
+    action: "UPDATE",
+    module: "schedules",
     description: `قام المشرف ${req.user.name} بإلغاء تعيين الجدول "${template.name}" وإتاحته كشاغر مجدداً`,
     targetId: template._id,
-    targetModel: 'TimetableTemplate',
+    targetModel: "TimetableTemplate",
   });
 
   const populated = await TimetableTemplate.findById(template._id)
-    .populate('subjects', 'name code color')
-    .populate('createdBy', 'name');
+    .populate("subjects", "name code color")
+    .populate("createdBy", "name");
 
-  return success(res, populated, `تم إلغاء تعيين الجدول "${template.name}" وأصبح متاحاً للاختيار بنجاح ✅`);
+  return success(
+    res,
+    populated,
+    `تم إلغاء تعيين الجدول "${template.name}" وأصبح متاحاً للاختيار بنجاح ✅`,
+  );
 });
-
