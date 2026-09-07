@@ -1242,4 +1242,3 @@ exports.claimTimetable = catchAsync(async (req, res) => {
     `تم تعيين وتثبيت جدول (${sourceTeacher.name}) لحسابك بنجاح 🎉 (${transferResult.modifiedCount} حصة)`,
   );
 });
-

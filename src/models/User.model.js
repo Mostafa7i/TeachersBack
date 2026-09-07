@@ -1,16 +1,16 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 
 const userSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, 'اسم المستخدم مطلوب'],
+      required: [true, "اسم المستخدم مطلوب"],
       trim: true,
     },
     email: {
       type: String,
-      required: [true, 'البريد الإلكتروني مطلوب'],
+      required: [true, "البريد الإلكتروني مطلوب"],
       unique: true,
       lowercase: true,
       trim: true,
@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      minlength: [6, 'يجب ألا تقل كلمة المرور عن 6 أحرف'],
+      minlength: [6, "يجب ألا تقل كلمة المرور عن 6 أحرف"],
       select: false,
       required: function () {
         return !this.googleId;
@@ -32,12 +32,12 @@ const userSchema = new mongoose.Schema(
     },
     avatar: {
       type: String,
-      default: '',
+      default: "",
     },
     phone: {
       type: String,
       trim: true,
-      default: '',
+      default: "",
     },
     isProfileComplete: {
       type: Boolean,
@@ -46,14 +46,14 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Role',
-      required: [true, 'الدور مطلوب'],
+      ref: "Role",
+      required: [true, "الدور مطلوب"],
       index: true,
     },
     subjects: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Subject',
+        ref: "Subject",
       },
     ],
     isActive: {
@@ -66,7 +66,7 @@ const userSchema = new mongoose.Schema(
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: "User",
     },
     isClaimed: {
       type: Boolean,
@@ -75,7 +75,7 @@ const userSchema = new mongoose.Schema(
     },
     claimedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: "User",
       default: null,
     },
   },
@@ -87,12 +87,12 @@ const userSchema = new mongoose.Schema(
         return ret;
       },
     },
-  }
+  },
 );
 
 // Hash password before saving
-userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+userSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
   const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
   next();
@@ -103,4 +103,4 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model("User", userSchema);
