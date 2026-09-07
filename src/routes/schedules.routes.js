@@ -29,6 +29,16 @@ router.get(
 router.get("/teacher/me", schedulesController.getForTeacher);
 router.get("/available-timetables", schedulesController.getAvailableTimetables);
 router.post("/claim-timetable", schedulesController.claimTimetable);
+router.post(
+  "/assign-timetable-to-teacher",
+  requirePermission(["schedules.create", "schedules.edit"]),
+  schedulesController.assignTimetableToTeacher,
+);
+router.post(
+  "/toggle-timetable-claimed",
+  requirePermission(["schedules.create", "schedules.edit"]),
+  schedulesController.toggleTimetableClaimed,
+);
 router.get(
   "/teacher-timetable/:teacherId",
   requirePermission(["schedules.view", "schedules.edit", "users.view"]),

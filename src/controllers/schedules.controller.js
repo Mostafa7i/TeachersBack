@@ -1242,3 +1242,129 @@ exports.claimTimetable = catchAsync(async (req, res) => {
     `تم تعيين وتثبيت جدول (${sourceTeacher.name}) لحسابك بنجاح 🎉 (${transferResult.modifiedCount} حصة)`,
   );
 });
+
+/**
+ * POST /api/schedules/assign-timetable-to-teacher
+ * Admin manually assigns an unclaimed or placeholder timetable to an existing registered teacher
+ */
+exports.assignTimetableToTeacher = catchAsync(async (req, res) => {
+  const { sourceTeacherId, targetTeacherId, weekId } = req.body;
+
+  if (!sourceTeacherId || !targetTeacherId) {
+    return error(res, "يرجى تحديد الجدول المصدر والمعلم المستهدف للتعيين", 400);
+  }
+
+  const [sourceTeacher, targetTeacher] = await Promise.all([
+    User.findById(sourceTeacherId).populate(
+      "subjects",
+      "name nameEn code color",
+    ),
+    User.findById(targetTeacherId).populate(
+      "subjects",
+      "name nameEn code color",
+    ),
+  ]);
+
+  if (!sourceTeacher || !targetTeacher) {
+    return error(res, "المعلم المصدر أو المعلم المستهدف غير موجود", 404);
+  }
+
+  // Transfer all schedules from sourceTeacher to targetTeacher across all weeks
+  const transferResult = await Schedule.updateMany(
+    { teacher: sourceTeacher._id },
+    {
+      $set: {
+        teacher: targetTeacher._id,
+        updatedBy: req.user._id,
+      },
+    },
+  );
+
+  // Merge subjects
+  const schedulesOfTarget = await Schedule.find({ teacher: targetTeacher._id });
+  const mergedSubjectIds = new Set(
+    schedulesOfTarget.map((s) => s.subject.toString()),
+  );
+
+  (sourceTeacher.subjects || []).forEach((sub) => {
+    const sId = (sub._id || sub).toString();
+    mergedSubjectIds.add(sId);
+  });
+
+  (targetTeacher.subjects || []).forEach((sub) => {
+    const sId = (sub._id || sub).toString();
+    mergedSubjectIds.add(sId);
+  });
+
+  targetTeacher.subjects = Array.from(mergedSubjectIds);
+  targetTeacher.isProfileComplete = true;
+  await targetTeacher.save({ validateBeforeSave: false });
+
+  // If source and target are different, mark source as claimed/deactivated
+  if (sourceTeacher._id.toString() !== targetTeacher._id.toString()) {
+    sourceTeacher.isClaimed = true;
+    sourceTeacher.claimedBy = targetTeacher._id;
+    sourceTeacher.isActive = false;
+    await sourceTeacher.save({ validateBeforeSave: false });
+  } else {
+    sourceTeacher.isClaimed = true;
+    await sourceTeacher.save({ validateBeforeSave: false });
+  }
+
+  await createAuditLog({
+    req,
+    action: "UPDATE",
+    module: "schedules",
+    description: `قام المشرف ${req.user.name} بتعيين جدول (${sourceTeacher.name}) إلى المعلم (${targetTeacher.name}) بعدد ${transferResult.modifiedCount} حصة.`,
+    targetId: targetTeacher._id,
+    targetModel: "User",
+  });
+
+  return success(
+    res,
+    {
+      targetTeacher,
+      transferredCount: transferResult.modifiedCount,
+    },
+    `تم تعيين جدول (${sourceTeacher.name}) إلى المعلم (${targetTeacher.name}) بنجاح ✅ (${transferResult.modifiedCount} حصة)`,
+  );
+});
+
+/**
+ * POST /api/schedules/toggle-timetable-claimed
+ * Admin can mark an existing teacher's timetable as claimed (not vacant) or available (vacant)
+ */
+exports.toggleTimetableClaimed = catchAsync(async (req, res) => {
+  const { teacherId, isClaimed } = req.body;
+
+  if (!teacherId) {
+    return error(res, "معرف المعلم مطلوب", 400);
+  }
+
+  const teacher = await User.findById(teacherId);
+  if (!teacher) {
+    return error(res, "المعلم غير موجود", 404);
+  }
+
+  teacher.isClaimed = Boolean(isClaimed);
+  if (isClaimed) {
+    teacher.isProfileComplete = true;
+  }
+  await teacher.save({ validateBeforeSave: false });
+
+  await createAuditLog({
+    req,
+    action: "UPDATE",
+    module: "schedules",
+    description: `تغيير حالة الجدول للمعلم ${teacher.name} إلى: ${teacher.isClaimed ? "معين ومحجوز" : "شاغر متاح للاختيار"}`,
+    targetId: teacher._id,
+    targetModel: "User",
+  });
+
+  return success(
+    res,
+    teacher,
+    `تم تحديث حالة الجدول للمعلم (${teacher.name}) إلى: ${teacher.isClaimed ? "معين ومحجوز 🔒" : "شاغر ومتاح للاختيار 🟢"}`,
+  );
+});
+
