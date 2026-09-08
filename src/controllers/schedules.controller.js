@@ -4,6 +4,7 @@ const Subject = require("../models/Subject.model");
 const User = require("../models/User.model");
 const Role = require("../models/Role.model");
 const TimetableTemplate = require("../models/TimetableTemplate.model");
+const { parseTimetablePdf } = require("../utils/pdfTimetableParser");
 const catchAsync = require("../utils/catchAsync");
 const { success, error } = require("../utils/apiResponse");
 const { createAuditLog } = require("../middleware/auditLog.middleware");
@@ -188,6 +189,43 @@ exports.saveTeacherTimetable = catchAsync(async (req, res) => {
     return error(res, "المعلم أو الأسبوع غير موجود", 404);
   }
 
+  // Load existing schedules before deleting, to preserve any prepared lessons/homework
+  const existingSchedules = await Schedule.find({
+    week: weekId,
+    teacher: teacherId,
+  });
+
+  const exactSlotMap = new Map();
+  const classSubjectPool = new Map();
+
+  existingSchedules.forEach((s) => {
+    const slotKey = `${s.day}_${s.period}`;
+    exactSlotMap.set(slotKey, s);
+
+    const hasContent = Boolean(
+      (s.lessonTitle && s.lessonTitle.trim()) ||
+      (s.homework && s.homework.trim()) ||
+      (s.activities && s.activities.trim()) ||
+      (s.notes && s.notes.trim())
+    );
+
+    if (hasContent && s.subject) {
+      const subjStr = (s.subject._id || s.subject).toString();
+      const clsStr = (s.className || "").trim();
+      const poolKey = `${subjStr}_${clsStr}`;
+      if (!classSubjectPool.has(poolKey)) {
+        classSubjectPool.set(poolKey, []);
+      }
+      classSubjectPool.get(poolKey).push({
+        lessonTitle: s.lessonTitle || "",
+        homework: s.homework || "",
+        activities: s.activities || "",
+        notes: s.notes || "",
+        used: false,
+      });
+    }
+  });
+
   // Remove existing schedule slots for this teacher in this week
   await Schedule.deleteMany({
     week: weekId,
@@ -200,6 +238,45 @@ exports.saveTeacherTimetable = catchAsync(async (req, res) => {
       const resolvedDate = e.dayDate
         ? new Date(e.dayDate)
         : calculateDayDate(week.startDate, e.day);
+
+      const subjIdStr = (e.subject?._id || e.subject).toString();
+      const clsName = e.className ? e.className.trim() : "";
+      const slotKey = `${e.day}_${e.period}`;
+
+      let lessonTitle = e.lessonTitle || "";
+      let homework = e.homework || "";
+      let activities = e.activities || "";
+      let notes = e.notes || "";
+
+      // 1. If empty, check if exact slot previously had preparation for the same subject & class
+      const exactPrev = exactSlotMap.get(slotKey);
+      if (!lessonTitle && !homework && exactPrev) {
+        const prevSubjStr = (exactPrev.subject?._id || exactPrev.subject || "").toString();
+        const prevCls = (exactPrev.className || "").trim();
+        if (prevSubjStr === subjIdStr && prevCls === clsName) {
+          lessonTitle = exactPrev.lessonTitle || "";
+          homework = exactPrev.homework || "";
+          activities = exactPrev.activities || "";
+          notes = exactPrev.notes || "";
+        }
+      }
+
+      // 2. If still empty, check the class/subject pool (this period moved from another day/slot!)
+      if (!lessonTitle && !homework) {
+        const poolKey = `${subjIdStr}_${clsName}`;
+        const pool = classSubjectPool.get(poolKey);
+        if (pool && pool.length > 0) {
+          const available = pool.find((item) => !item.used);
+          if (available) {
+            available.used = true;
+            lessonTitle = available.lessonTitle;
+            homework = available.homework;
+            activities = available.activities;
+            notes = available.notes;
+          }
+        }
+      }
+
       return {
         week: weekId,
         day: e.day,
@@ -208,11 +285,16 @@ exports.saveTeacherTimetable = catchAsync(async (req, res) => {
         subject: e.subject,
         teacher: teacherId,
         className: e.className ? e.className.trim() : "",
+        className: clsName,
         room: e.room ? e.room.trim() : "",
         lessonTitle: e.lessonTitle || "",
         homework: e.homework || "",
         activities: e.activities || "",
         notes: e.notes || "",
+        lessonTitle,
+        homework,
+        activities,
+        notes,
         createdBy: req.user._id,
         updatedBy: req.user._id,
       };
@@ -829,6 +911,107 @@ exports.saveMasterCell = catchAsync(async (req, res) => {
     .populate("teacher", "name email");
 
   return success(res, populated, "تم تعيين الحصة وحفظها بنجاح ✅");
+});
+
+/**
+ * POST /api/schedules/swap-period
+ * Move or swap a scheduled period to a different day/period, preserving all lesson preparations 100%!
+ */
+exports.swapPeriod = catchAsync(async (req, res) => {
+  const { weekId, teacherId, fromDay, fromPeriod, toDay, toPeriod } = req.body;
+
+  if (!weekId || !teacherId || !fromDay || !fromPeriod || !toDay || !toPeriod) {
+    return error(res, "جميع بيانات النقل والتبديل مطلوبة", 400);
+  }
+
+  const week = await Week.findById(weekId);
+  if (!week) return error(res, "الأسبوع غير موجود", 404);
+
+  const sourceSchedule = await Schedule.findOne({
+    week: weekId,
+    teacher: teacherId,
+    day: fromDay,
+    period: Number(fromPeriod),
+  });
+
+  if (!sourceSchedule) {
+    return error(res, "الحصة المراد نقلها غير موجودة", 404);
+  }
+
+  const targetSchedule = await Schedule.findOne({
+    week: weekId,
+    teacher: teacherId,
+    day: toDay,
+    period: Number(toPeriod),
+  });
+
+  const targetDate = calculateDayDate(week.startDate, toDay);
+  const sourceDate = calculateDayDate(week.startDate, fromDay);
+
+  if (!targetSchedule) {
+    // MOVE: Target is empty -> simply move sourceSchedule to target
+    sourceSchedule.day = toDay;
+    sourceSchedule.period = Number(toPeriod);
+    sourceSchedule.dayDate = targetDate;
+    sourceSchedule.updatedBy = req.user._id;
+    await sourceSchedule.save();
+
+    await createAuditLog({
+      req,
+      action: "UPDATE",
+      module: "schedules",
+      description: `نقل حصة المعلم من (${fromDay} - حصة ${fromPeriod}) إلى (${toDay} - حصة ${toPeriod}) مع الاحتفاظ بالتحضير`,
+      targetId: sourceSchedule._id,
+      targetModel: "Schedule",
+    });
+
+    const populated = await Schedule.findById(sourceSchedule._id)
+      .populate("subject", "name nameEn code color")
+      .populate("teacher", "name email");
+
+    return success(
+      res,
+      { mode: "move", source: populated, target: null },
+      `تم نقل الحصة بنجاح إلى يوم ${toDay} (الحصة ${toPeriod}) مع الحفاظ التام على التحضير والواجبات ✅`
+    );
+  } else {
+    // SWAP: Target exists -> swap day, period, and date
+    sourceSchedule.day = toDay;
+    sourceSchedule.period = Number(toPeriod);
+    sourceSchedule.dayDate = targetDate;
+    sourceSchedule.updatedBy = req.user._id;
+
+    targetSchedule.day = fromDay;
+    targetSchedule.period = Number(fromPeriod);
+    targetSchedule.dayDate = sourceDate;
+    targetSchedule.updatedBy = req.user._id;
+
+    await Promise.all([sourceSchedule.save(), targetSchedule.save()]);
+
+    await createAuditLog({
+      req,
+      action: "UPDATE",
+      module: "schedules",
+      description: `تبديل حصص المعلم بين (${fromDay} - حصة ${fromPeriod}) و (${toDay} - حصة ${toPeriod}) مع الاحتفاظ بالتحضير`,
+      targetId: sourceSchedule._id,
+      targetModel: "Schedule",
+    });
+
+    const [popSource, popTarget] = await Promise.all([
+      Schedule.findById(sourceSchedule._id)
+        .populate("subject", "name nameEn code color")
+        .populate("teacher", "name email"),
+      Schedule.findById(targetSchedule._id)
+        .populate("subject", "name nameEn code color")
+        .populate("teacher", "name email"),
+    ]);
+
+    return success(
+      res,
+      { mode: "swap", source: popSource, target: popTarget },
+      `تم تبديل الحصتين بنجاح مع الحفاظ التام على تحضير وواجبات كل منهما ✅`
+    );
+  }
 });
 
 /**
@@ -1887,5 +2070,214 @@ exports.unclaimTemplate = catchAsync(async (req, res) => {
     res,
     populated,
     `تم إلغاء تعيين الجدول "${template.name}" وأصبح متاحاً للاختيار بنجاح ✅`,
+  );
+});
+
+/**
+ * POST /api/schedules/import-pdf
+ * Uploads a school timetable PDF, parses it, and returns detected timetables for preview
+ */
+exports.importPdfTimetables = catchAsync(async (req, res) => {
+  if (!req.file || !req.file.buffer) {
+    return error(res, "يرجى رفع ملف PDF صالح", 400);
+  }
+
+  // Find teacher role
+  const teacherRole = await Role.findOne({
+    name: { $regex: /معلم|teacher/i },
+  });
+
+  const [existingTeachers, existingSubjects] = await Promise.all([
+    User.find(teacherRole ? { role: teacherRole._id, isActive: true } : { isActive: true })
+      .select("name email subjects")
+      .populate("subjects", "name code color"),
+    Subject.find({ isActive: true }).select("name code color"),
+  ]);
+
+  const detectedTimetables = await parseTimetablePdf(
+    req.file.buffer,
+    existingTeachers,
+    existingSubjects
+  );
+
+  if (!detectedTimetables || detectedTimetables.length === 0) {
+    return error(
+      res,
+      "تعذر العثور على جداول صالحة داخل ملف الـ PDF. يرجى التأكد من أن الملف نصي ويحتوي على جداول حصص.",
+      422
+    );
+  }
+
+  return success(
+    res,
+    {
+      detectedCount: detectedTimetables.length,
+      timetables: detectedTimetables,
+      availableTeachers: existingTeachers.map((t) => ({
+        _id: t._id,
+        name: t.name,
+        email: t.email,
+        subjects: t.subjects,
+      })),
+      availableSubjects: existingSubjects,
+    },
+    `تم استخراج ${detectedTimetables.length} جدول بنجاح من ملف الـ PDF 📄✨`
+  );
+});
+
+/**
+ * POST /api/schedules/confirm-import-pdf
+ * Confirms and executes saving the imported timetables
+ */
+exports.confirmImportPdf = catchAsync(async (req, res) => {
+  const { timetables, weekId } = req.body;
+
+  if (!Array.isArray(timetables) || timetables.length === 0) {
+    return error(res, "لا توجد جداول محددة للحفظ", 400);
+  }
+
+  // Resolve week
+  let week = null;
+  if (weekId) week = await Week.findById(weekId);
+  if (!week) week = await Week.findOne({ isActive: true }).sort({ startDate: -1 });
+  if (!week) return error(res, "لا يوجد أسبوع نشط لتعيين الحصص عليه", 404);
+
+  const existingSubjects = await Subject.find();
+  const subjectMap = new Map();
+  existingSubjects.forEach((s) => {
+    subjectMap.set(s.name.trim(), s);
+  });
+
+  const DAY_NAMES_ORDERED = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"];
+  const weekStart = new Date(week.startDate);
+  const dayDatesMap = {};
+  DAY_NAMES_ORDERED.forEach((d, i) => {
+    const date = new Date(weekStart);
+    date.setDate(weekStart.getDate() + i);
+    dayDatesMap[d] = date;
+  });
+
+  let assignedTeachersCount = 0;
+  let vacantTemplatesCount = 0;
+  let totalSchedulesCreated = 0;
+
+  for (const item of timetables) {
+    if (item.action === "skip") continue;
+
+    // Resolve subject IDs for this timetable
+    const resolvedSubjectIds = [];
+    for (const subName of item.subjects || []) {
+      const cleanSubName = subName ? subName.trim() : "مادة عامة";
+      let subjDoc = subjectMap.get(cleanSubName);
+      if (!subjDoc) {
+        subjDoc = await Subject.create({
+          name: cleanSubName,
+          code: cleanSubName.slice(0, 3).toUpperCase() + Math.floor(Math.random() * 100),
+          color: "#3b82f6",
+          isActive: true,
+          createdBy: req.user._id,
+        });
+        subjectMap.set(cleanSubName, subjDoc);
+      }
+      if (!resolvedSubjectIds.includes(subjDoc._id.toString())) {
+        resolvedSubjectIds.push(subjDoc._id.toString());
+      }
+    }
+
+    if (item.action === "assign" && item.targetTeacherId) {
+      const targetTeacher = await User.findById(item.targetTeacherId);
+      if (targetTeacher) {
+        const scheduleOps = (item.entries || [])
+          .map((entry) => {
+            let subjDoc = subjectMap.get((entry.subjectName || "").trim());
+            if (!subjDoc) {
+              subjDoc = existingSubjects[0];
+            }
+            const dayDate = dayDatesMap[entry.day] || weekStart;
+
+            return {
+              updateOne: {
+                filter: {
+                  week: week._id,
+                  day: entry.day,
+                  period: Number(entry.period),
+                  teacher: targetTeacher._id,
+                },
+                update: {
+                  $set: {
+                    week: week._id,
+                    day: entry.day,
+                    period: Number(entry.period),
+                    dayDate,
+                    subject: subjDoc ? subjDoc._id : null,
+                    teacher: targetTeacher._id,
+                    className: entry.className || "",
+                    room: entry.room || "",
+                    createdBy: req.user._id,
+                    updatedBy: req.user._id,
+                  },
+                },
+                upsert: true,
+              },
+            };
+          })
+          .filter((op) => op.updateOne.update.$set.subject);
+
+        if (scheduleOps.length > 0) {
+          await Schedule.bulkWrite(scheduleOps);
+          totalSchedulesCreated += scheduleOps.length;
+        }
+
+        // Add subjects to teacher
+        const existingTeacherSubs = (targetTeacher.subjects || []).map((s) => s.toString());
+        targetTeacher.subjects = [...new Set([...existingTeacherSubs, ...resolvedSubjectIds])];
+        targetTeacher.isProfileComplete = true;
+        await targetTeacher.save({ validateBeforeSave: false });
+
+        assignedTeachersCount++;
+      }
+    } else {
+      // Create TimetableTemplate
+      const templateEntries = (item.entries || []).map((entry) => {
+        let subjDoc = subjectMap.get((entry.subjectName || "").trim());
+        return {
+          day: entry.day,
+          period: Number(entry.period),
+          subject: subjDoc ? subjDoc._id : null,
+          className: entry.className || "",
+          room: entry.room || "",
+        };
+      });
+
+      await TimetableTemplate.create({
+        name: item.extractedName || `جدول شاغر مستورد (${vacantTemplatesCount + 1})`,
+        subjects: resolvedSubjectIds,
+        entries: templateEntries,
+        isClaimed: false,
+        isActive: true,
+        createdBy: req.user._id,
+      });
+
+      vacantTemplatesCount++;
+    }
+  }
+
+  await createAuditLog({
+    req,
+    action: "CREATE",
+    module: "schedules",
+    description: `استيراد جداول من ملف PDF: تم تعيين ${assignedTeachersCount} معلم، وإنشاء ${vacantTemplatesCount} جدول شاغر جديد (${totalSchedulesCreated} حصة).`,
+    targetModel: "TimetableTemplate",
+  });
+
+  return success(
+    res,
+    {
+      assignedTeachersCount,
+      vacantTemplatesCount,
+      totalSchedulesCreated,
+      week,
+    },
+    `تم استيراد الجداول بنجاح 🎉 (${assignedTeachersCount} معلم تم تعيينهم، ${vacantTemplatesCount} جدول شاغر متاح للمعلّمين الجدد)`
   );
 });

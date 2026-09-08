@@ -1,11 +1,27 @@
 const express = require("express");
 const { body } = require("express-validator");
+const multer = require("multer");
 const schedulesController = require("../controllers/schedules.controller");
 const { protect } = require("../middleware/auth.middleware");
 const { requirePermission } = require("../middleware/rbac.middleware");
 const validate = require("../middleware/validate.middleware");
 
 const router = express.Router();
+
+const pdfUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
+  fileFilter: (req, file, cb) => {
+    if (
+      file.mimetype === "application/pdf" ||
+      file.originalname.toLowerCase().endsWith(".pdf")
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error("يرجى رفع ملف بصيغة PDF فقط"));
+    }
+  },
+});
 
 router.use(protect);
 
@@ -59,6 +75,11 @@ router.post(
   schedulesController.saveMasterCell,
 );
 router.post(
+  "/swap-period",
+  requirePermission(["schedules.create", "schedules.edit"]),
+  schedulesController.swapPeriod,
+);
+router.post(
   "/copy-week",
   requirePermission([
     "schedules.create",
@@ -75,6 +96,17 @@ router.post(
     "schedules.edit_homework",
   ]),
   schedulesController.bulkFillGrade,
+);
+router.post(
+  "/import-pdf",
+  requirePermission(["schedules.create", "schedules.edit"]),
+  pdfUpload.single("file"),
+  schedulesController.importPdfTimetables,
+);
+router.post(
+  "/confirm-import-pdf",
+  requirePermission(["schedules.create", "schedules.edit"]),
+  schedulesController.confirmImportPdf,
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
