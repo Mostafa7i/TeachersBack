@@ -206,7 +206,7 @@ exports.saveTeacherTimetable = catchAsync(async (req, res) => {
       (s.lessonTitle && s.lessonTitle.trim()) ||
       (s.homework && s.homework.trim()) ||
       (s.activities && s.activities.trim()) ||
-      (s.notes && s.notes.trim())
+      (s.notes && s.notes.trim()),
     );
 
     if (hasContent && s.subject) {
@@ -251,7 +251,11 @@ exports.saveTeacherTimetable = catchAsync(async (req, res) => {
       // 1. If empty, check if exact slot previously had preparation for the same subject & class
       const exactPrev = exactSlotMap.get(slotKey);
       if (!lessonTitle && !homework && exactPrev) {
-        const prevSubjStr = (exactPrev.subject?._id || exactPrev.subject || "").toString();
+        const prevSubjStr = (
+          exactPrev.subject?._id ||
+          exactPrev.subject ||
+          ""
+        ).toString();
         const prevCls = (exactPrev.className || "").trim();
         if (prevSubjStr === subjIdStr && prevCls === clsName) {
           lessonTitle = exactPrev.lessonTitle || "";
@@ -972,7 +976,7 @@ exports.swapPeriod = catchAsync(async (req, res) => {
     return success(
       res,
       { mode: "move", source: populated, target: null },
-      `تم نقل الحصة بنجاح إلى يوم ${toDay} (الحصة ${toPeriod}) مع الحفاظ التام على التحضير والواجبات ✅`
+      `تم نقل الحصة بنجاح إلى يوم ${toDay} (الحصة ${toPeriod}) مع الحفاظ التام على التحضير والواجبات ✅`,
     );
   } else {
     // SWAP: Target exists -> swap day, period, and date
@@ -1009,7 +1013,7 @@ exports.swapPeriod = catchAsync(async (req, res) => {
     return success(
       res,
       { mode: "swap", source: popSource, target: popTarget },
-      `تم تبديل الحصتين بنجاح مع الحفاظ التام على تحضير وواجبات كل منهما ✅`
+      `تم تبديل الحصتين بنجاح مع الحفاظ التام على تحضير وواجبات كل منهما ✅`,
     );
   }
 });
@@ -2088,7 +2092,11 @@ exports.importPdfTimetables = catchAsync(async (req, res) => {
   });
 
   const [existingTeachers, existingSubjects] = await Promise.all([
-    User.find(teacherRole ? { role: teacherRole._id, isActive: true } : { isActive: true })
+    User.find(
+      teacherRole
+        ? { role: teacherRole._id, isActive: true }
+        : { isActive: true },
+    )
       .select("name email subjects")
       .populate("subjects", "name code color"),
     Subject.find({ isActive: true }).select("name code color"),
@@ -2097,14 +2105,14 @@ exports.importPdfTimetables = catchAsync(async (req, res) => {
   const detectedTimetables = await parseTimetablePdf(
     req.file.buffer,
     existingTeachers,
-    existingSubjects
+    existingSubjects,
   );
 
   if (!detectedTimetables || detectedTimetables.length === 0) {
     return error(
       res,
       "تعذر العثور على جداول صالحة داخل ملف الـ PDF. يرجى التأكد من أن الملف نصي ويحتوي على جداول حصص.",
-      422
+      422,
     );
   }
 
@@ -2121,7 +2129,7 @@ exports.importPdfTimetables = catchAsync(async (req, res) => {
       })),
       availableSubjects: existingSubjects,
     },
-    `تم استخراج ${detectedTimetables.length} جدول بنجاح من ملف الـ PDF 📄✨`
+    `تم استخراج ${detectedTimetables.length} جدول بنجاح من ملف الـ PDF 📄✨`,
   );
 });
 
@@ -2139,7 +2147,8 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
   // Resolve week
   let week = null;
   if (weekId) week = await Week.findById(weekId);
-  if (!week) week = await Week.findOne({ isActive: true }).sort({ startDate: -1 });
+  if (!week)
+    week = await Week.findOne({ isActive: true }).sort({ startDate: -1 });
   if (!week) return error(res, "لا يوجد أسبوع نشط لتعيين الحصص عليه", 404);
 
   const existingSubjects = await Subject.find();
@@ -2163,7 +2172,10 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
         .replace(/ى/g, "ي")
         .replace(/ة/g, "ه")
         .trim();
-      return sNorm === norm || (norm.length > 3 && (sNorm.includes(norm) || norm.includes(sNorm)));
+      return (
+        sNorm === norm ||
+        (norm.length > 3 && (sNorm.includes(norm) || norm.includes(sNorm)))
+      );
     });
 
     if (found) return found;
@@ -2179,7 +2191,13 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
     return newDoc;
   };
 
-  const DAY_NAMES_ORDERED = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"];
+  const DAY_NAMES_ORDERED = [
+    "الأحد",
+    "الإثنين",
+    "الثلاثاء",
+    "الأربعاء",
+    "الخميس",
+  ];
   const weekStart = new Date(week.startDate);
   const dayDatesMap = {};
   DAY_NAMES_ORDERED.forEach((d, i) => {
@@ -2247,8 +2265,12 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
         }
 
         // Add subjects to teacher
-        const existingTeacherSubs = (targetTeacher.subjects || []).map((s) => s.toString());
-        targetTeacher.subjects = [...new Set([...existingTeacherSubs, ...resolvedSubjectIds])];
+        const existingTeacherSubs = (targetTeacher.subjects || []).map((s) =>
+          s.toString(),
+        );
+        targetTeacher.subjects = [
+          ...new Set([...existingTeacherSubs, ...resolvedSubjectIds]),
+        ];
         targetTeacher.isProfileComplete = true;
         await targetTeacher.save({ validateBeforeSave: false });
 
@@ -2269,7 +2291,9 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
       }
 
       await TimetableTemplate.create({
-        name: item.extractedName ? `جدول المعلم: ${item.extractedName}` : `جدول شاغر مستورد (${vacantTemplatesCount + 1})`,
+        name: item.extractedName
+          ? `جدول المعلم: ${item.extractedName}`
+          : `جدول شاغر مستورد (${vacantTemplatesCount + 1})`,
         subjects: resolvedSubjectIds,
         entries: templateEntries,
         isClaimed: false,
@@ -2297,6 +2321,6 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
       totalSchedulesCreated,
       week,
     },
-    `تم استيراد الجداول بنجاح 🎉 (${assignedTeachersCount} معلم تم تعيينهم، ${vacantTemplatesCount} جدول شاغر متاح للمعلّمين الجدد)`
+    `تم استيراد الجداول بنجاح 🎉 (${assignedTeachersCount} معلم تم تعيينهم، ${vacantTemplatesCount} جدول شاغر متاح للمعلّمين الجدد)`,
   );
 });

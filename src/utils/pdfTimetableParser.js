@@ -4,15 +4,15 @@
  */
 
 const CANONICAL_DAYS = {
-  "الأحد": "الأحد",
-  "الاحد": "الأحد",
-  "الإثنين": "الإثنين",
-  "الاثنين": "الإثنين",
-  "الثلاثاء": "الثلاثاء",
+  الأحد: "الأحد",
+  الاحد: "الأحد",
+  الإثنين: "الإثنين",
+  الاثنين: "الإثنين",
+  الثلاثاء: "الثلاثاء",
   "الث hisاء": "الثلاثاء",
-  "الأربعاء": "الأربعاء",
-  "الاربعاء": "الأربعاء",
-  "الخميس": "الخميس",
+  الأربعاء: "الأربعاء",
+  الاربعاء: "الأربعاء",
+  الخميس: "الخميس",
 };
 
 const DAY_DEFS = [
@@ -25,33 +25,45 @@ const DAY_DEFS = [
 
 // Common Arabic name dictionary for matching Arabic names with English/Transliterated accounts
 const COMMON_NAME_PAIRS = {
-  "علي": ["ali", "aly"],
-  "على": ["ali", "aly"],
-  "زغلول": ["zaghloul", "zaghlul"],
-  "احمد": ["ahmed", "ahmad"],
-  "هشام": ["hesham", "hisham"],
-  "مصطفى": ["mustafa", "mostafa"],
-  "محمود": ["mahmoud", "mahmud"],
-  "محمد": ["mohamed", "mohammed", "muhammad", "mohd"],
-  "سعيد": ["saeid", "saeed", "said"],
-  "اسامة": ["osama", "ousama"],
-  "حسن": ["hassan", "hasan"],
-  "عبدالرحمن": ["abdelrahman", "abdulrahman", "abdurrahman"],
+  علي: ["ali", "aly"],
+  على: ["ali", "aly"],
+  زغلول: ["zaghloul", "zaghlul"],
+  احمد: ["ahmed", "ahmad"],
+  هشام: ["hesham", "hisham"],
+  مصطفى: ["mustafa", "mostafa"],
+  محمود: ["mahmoud", "mahmud"],
+  محمد: ["mohamed", "mohammed", "muhammad", "mohd"],
+  سعيد: ["saeid", "saeed", "said"],
+  اسامة: ["osama", "ousama"],
+  حسن: ["hassan", "hasan"],
+  عبدالرحمن: ["abdelrahman", "abdulrahman", "abdurrahman"],
   "عبد الرحمن": ["abdelrahman", "abdulrahman", "abdurrahman"],
-  "بهاء": ["bahaa", "baha", "abomoomen"],
-  "صالح": ["saleh", "salih"],
-  "صالحي": ["salehi", "salhy", "al351961"],
-  "برقوقي": ["barqouqi", "albarqouqi"],
+  بهاء: ["bahaa", "baha", "abomoomen"],
+  صالح: ["saleh", "salih"],
+  صالحي: ["salehi", "salhy", "al351961"],
+  برقوقي: ["barqouqi", "albarqouqi"],
 };
 
 // Known common subject aliases and normalizations
 const SUBJECT_ALIASES = [
   { canon: "رياضيات", aliases: ["رياضيات", "math", "maths"] },
   { canon: "علوم", aliases: ["العلوم", "علوم", "science"] },
-  { canon: "لغة عربية", aliases: ["لغة عربية", "لغتي", "عربي", "اللغة العربية"] },
-  { canon: "درسات اجتماعية", aliases: ["درسات اجتماعية", "دراسات اجتماعية", "اجتماعيات"] },
-  { canon: "لغة انجليزية", aliases: ["لغة انجليزية", "لغة إنجليزية", "إنجليزي", "انجليزي", "english"] },
-  { canon: "تربية اسلامية", aliases: ["تربية اسلامية", "تربية إسلامية", "إسلاميات", "اسلاميات", "دين"] },
+  {
+    canon: "لغة عربية",
+    aliases: ["لغة عربية", "لغتي", "عربي", "اللغة العربية"],
+  },
+  {
+    canon: "درسات اجتماعية",
+    aliases: ["درسات اجتماعية", "دراسات اجتماعية", "اجتماعيات"],
+  },
+  {
+    canon: "لغة انجليزية",
+    aliases: ["لغة انجليزية", "لغة إنجليزية", "إنجليزي", "انجليزي", "english"],
+  },
+  {
+    canon: "تربية اسلامية",
+    aliases: ["تربية اسلامية", "تربية إسلامية", "إسلاميات", "اسلاميات", "دين"],
+  },
   { canon: "رقمية", aliases: ["رقمية", "مهارات رقمية", "حاسب", "حاسوب"] },
   { canon: "بدنية", aliases: ["بدنية", "تربية بدنية", "رياضة"] },
   { canon: "فنية", aliases: ["فنية", "تربية فنية", "رسم"] },
@@ -108,7 +120,7 @@ function stringSimilarity(s1, s2) {
       matrix[i][j] = Math.min(
         matrix[i - 1][j] + 1,
         matrix[i][j - 1] + 1,
-        matrix[i - 1][j - 1] + cost
+        matrix[i - 1][j - 1] + cost,
       );
     }
   }
@@ -124,7 +136,9 @@ function matchTeacherToUser(extractedName, existingTeachers = []) {
   if (!extractedName || !existingTeachers.length) return null;
 
   const normExtracted = normalizeArabic(extractedName);
-  const extractedTokens = normExtracted.split(/\s+/).filter((t) => t.length > 1);
+  const extractedTokens = normExtracted
+    .split(/\s+/)
+    .filter((t) => t.length > 1);
 
   let bestTeacher = null;
   let highestScore = 0;
@@ -138,7 +152,11 @@ function matchTeacherToUser(extractedName, existingTeachers = []) {
     if (normExtracted === normTeacher) {
       return { teacher, score: 1.0 };
     }
-    if (normTeacher && (normTeacher.includes(normExtracted) || normExtracted.includes(normTeacher))) {
+    if (
+      normTeacher &&
+      (normTeacher.includes(normExtracted) ||
+        normExtracted.includes(normTeacher))
+    ) {
       const score = 0.95;
       if (score > highestScore) {
         highestScore = score;
@@ -201,7 +219,10 @@ function normalizeSubject(rawSubject, existingSubjects = []) {
     if (norm === subNorm || norm.includes(subNorm) || subNorm.includes(norm)) {
       return sub.name;
     }
-    if (sub.nameEn && cleaned.toLowerCase().includes(sub.nameEn.toLowerCase())) {
+    if (
+      sub.nameEn &&
+      cleaned.toLowerCase().includes(sub.nameEn.toLowerCase())
+    ) {
       return sub.name;
     }
   }
@@ -213,7 +234,7 @@ function normalizeSubject(rawSubject, existingSubjects = []) {
       if (norm === aliasNorm || norm.includes(aliasNorm)) {
         // If the DB has this canonical name, use it
         const dbMatch = existingSubjects.find(
-          (s) => normalizeArabic(s.name) === normalizeArabic(item.canon)
+          (s) => normalizeArabic(s.name) === normalizeArabic(item.canon),
         );
         return dbMatch ? dbMatch.name : item.canon;
       }
@@ -227,7 +248,11 @@ function normalizeSubject(rawSubject, existingSubjects = []) {
  * Main parser function: processes PDF buffer using coordinate-based extraction
  * Supports aSc Timetables and other standard school schedule layouts
  */
-async function parseTimetablePdf(buffer, existingTeachers = [], existingSubjects = []) {
+async function parseTimetablePdf(
+  buffer,
+  existingTeachers = [],
+  existingSubjects = [],
+) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const doc = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
 
@@ -262,7 +287,7 @@ async function parseTimetablePdf(buffer, existingTeachers = [], existingSubjects
           !it.str.includes("مدرسة") &&
           !it.str.includes("جدول") &&
           !it.str.includes("العام") &&
-          !it.str.match(/^\d/)
+          !it.str.match(/^\d/),
       )
       .sort((a, b) => b.y - a.y);
 
@@ -271,7 +296,9 @@ async function parseTimetablePdf(buffer, existingTeachers = [], existingSubjects
     } else {
       // Fallback: look for prefix "المعلم:", "الأستاذ:", "أ/"
       for (const it of items) {
-        const m = it.str.match(/(?:المعلم|الأستاذ|الاستاذ|أ)\s*[:\/-]?\s*([^\n\r0-9]{3,30})/i);
+        const m = it.str.match(
+          /(?:المعلم|الأستاذ|الاستاذ|أ)\s*[:\/-]?\s*([^\n\r0-9]{3,30})/i,
+        );
         if (m && m[1]) {
           teacherName = m[1].trim();
           break;
@@ -292,7 +319,7 @@ async function parseTimetablePdf(buffer, existingTeachers = [], existingSubjects
     const detectedDays = [];
     for (const d of DAY_DEFS) {
       const match = items.find(
-        (it) => it.x > 680 && d.aliases.some((a) => it.str.includes(a))
+        (it) => it.x > 680 && d.aliases.some((a) => it.str.includes(a)),
       );
       if (match) {
         let yMin = match.y - 25;
@@ -388,7 +415,7 @@ async function parseTimetablePdf(buffer, existingTeachers = [], existingSubjects
             !it.str.match(/^\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}$/) && // filter time intervals
             !it.str.match(/^(break|استراحة|فسحة)$/i) &&
             !it.str.includes("aSc Timetables") &&
-            !it.str.includes("تم إنشاء الجدول")
+            !it.str.includes("تم إنشاء الجدول"),
         );
 
         if (cellItems.length === 0) continue;
@@ -402,11 +429,12 @@ async function parseTimetablePdf(buffer, existingTeachers = [], existingSubjects
         if (cellItems.length === 1) {
           const str = cellItems[0].str;
           const classMatch = str.match(
-            /(أول|ثاني|ثالث|رابع|خامس|سادس)\s+(أول|ثاني|ثالث|رابع|خامس|أ|ب|ج|د|1|2|3|4)/i
+            /(أول|ثاني|ثالث|رابع|خامس|سادس)\s+(أول|ثاني|ثالث|رابع|خامس|أ|ب|ج|د|1|2|3|4)/i,
           );
           if (classMatch) {
             className = classMatch[0];
-            subjectName = str.replace(classMatch[0], "").trim() || "مادة دراسية";
+            subjectName =
+              str.replace(classMatch[0], "").trim() || "مادة دراسية";
           } else {
             subjectName = str;
             className = "عام";
@@ -435,7 +463,9 @@ async function parseTimetablePdf(buffer, existingTeachers = [], existingSubjects
     // 5. Match teacher against existing users in DB
     const matchResult = matchTeacherToUser(teacherName, existingTeachers);
     const matchedTeacher = matchResult ? matchResult.teacher : null;
-    const matchConfidence = matchResult ? Math.round(matchResult.score * 100) : 0;
+    const matchConfidence = matchResult
+      ? Math.round(matchResult.score * 100)
+      : 0;
     const isHighConfidence = matchResult && matchResult.score >= 0.7;
 
     // Distinct subjects and classes
