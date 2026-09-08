@@ -2143,10 +2143,41 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
   if (!week) return error(res, "لا يوجد أسبوع نشط لتعيين الحصص عليه", 404);
 
   const existingSubjects = await Subject.find();
-  const subjectMap = new Map();
-  existingSubjects.forEach((s) => {
-    subjectMap.set(s.name.trim(), s);
-  });
+
+  const resolveSubject = async (rawName) => {
+    if (!rawName) return existingSubjects[0];
+    const clean = rawName.trim();
+    const norm = clean
+      .normalize("NFKC")
+      .replace(/[\u064B-\u065F\u0670]/g, "")
+      .replace(/[إأآا]/g, "ا")
+      .replace(/ى/g, "ي")
+      .replace(/ة/g, "ه")
+      .trim();
+
+    let found = existingSubjects.find((s) => {
+      const sNorm = (s.name || "")
+        .normalize("NFKC")
+        .replace(/[\u064B-\u065F\u0670]/g, "")
+        .replace(/[إأآا]/g, "ا")
+        .replace(/ى/g, "ي")
+        .replace(/ة/g, "ه")
+        .trim();
+      return sNorm === norm || (norm.length > 3 && (sNorm.includes(norm) || norm.includes(sNorm)));
+    });
+
+    if (found) return found;
+
+    const newDoc = await Subject.create({
+      name: clean,
+      code: clean.slice(0, 3).toUpperCase() + Math.floor(Math.random() * 100),
+      color: "#3b82f6",
+      isActive: true,
+      createdBy: req.user._id,
+    });
+    existingSubjects.push(newDoc);
+    return newDoc;
+  };
 
   const DAY_NAMES_ORDERED = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"];
   const weekStart = new Date(week.startDate);
@@ -2167,19 +2198,8 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
     // Resolve subject IDs for this timetable
     const resolvedSubjectIds = [];
     for (const subName of item.subjects || []) {
-      const cleanSubName = subName ? subName.trim() : "مادة عامة";
-      let subjDoc = subjectMap.get(cleanSubName);
-      if (!subjDoc) {
-        subjDoc = await Subject.create({
-          name: cleanSubName,
-          code: cleanSubName.slice(0, 3).toUpperCase() + Math.floor(Math.random() * 100),
-          color: "#3b82f6",
-          isActive: true,
-          createdBy: req.user._id,
-        });
-        subjectMap.set(cleanSubName, subjDoc);
-      }
-      if (!resolvedSubjectIds.includes(subjDoc._id.toString())) {
+      const subjDoc = await resolveSubject(subName);
+      if (subjDoc && !resolvedSubjectIds.includes(subjDoc._id.toString())) {
         resolvedSubjectIds.push(subjDoc._id.toString());
       }
     }
@@ -2187,15 +2207,13 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
     if (item.action === "assign" && item.targetTeacherId) {
       const targetTeacher = await User.findById(item.targetTeacherId);
       if (targetTeacher) {
-        const scheduleOps = (item.entries || [])
-          .map((entry) => {
-            let subjDoc = subjectMap.get((entry.subjectName || "").trim());
-            if (!subjDoc) {
-              subjDoc = existingSubjects[0];
-            }
-            const dayDate = dayDatesMap[entry.day] || weekStart;
+        const scheduleOps = [];
+        for (const entry of item.entries || []) {
+          const subjDoc = await resolveSubject(entry.subjectName);
+          const dayDate = dayDatesMap[entry.day] || weekStart;
 
-            return {
+          if (subjDoc) {
+            scheduleOps.push({
               updateOne: {
                 filter: {
                   week: week._id,
@@ -2209,7 +2227,7 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
                     day: entry.day,
                     period: Number(entry.period),
                     dayDate,
-                    subject: subjDoc ? subjDoc._id : null,
+                    subject: subjDoc._id,
                     teacher: targetTeacher._id,
                     className: entry.className || "",
                     room: entry.room || "",
@@ -2219,9 +2237,9 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
                 },
                 upsert: true,
               },
-            };
-          })
-          .filter((op) => op.updateOne.update.$set.subject);
+            });
+          }
+        }
 
         if (scheduleOps.length > 0) {
           await Schedule.bulkWrite(scheduleOps);
@@ -2238,19 +2256,20 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
       }
     } else {
       // Create TimetableTemplate
-      const templateEntries = (item.entries || []).map((entry) => {
-        let subjDoc = subjectMap.get((entry.subjectName || "").trim());
-        return {
+      const templateEntries = [];
+      for (const entry of item.entries || []) {
+        const subjDoc = await resolveSubject(entry.subjectName);
+        templateEntries.push({
           day: entry.day,
           period: Number(entry.period),
           subject: subjDoc ? subjDoc._id : null,
           className: entry.className || "",
           room: entry.room || "",
-        };
-      });
+        });
+      }
 
       await TimetableTemplate.create({
-        name: item.extractedName || `جدول شاغر مستورد (${vacantTemplatesCount + 1})`,
+        name: item.extractedName ? `جدول المعلم: ${item.extractedName}` : `جدول شاغر مستورد (${vacantTemplatesCount + 1})`,
         subjects: resolvedSubjectIds,
         entries: templateEntries,
         isClaimed: false,
