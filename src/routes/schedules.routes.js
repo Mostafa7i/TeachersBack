@@ -79,6 +79,7 @@ router.post(
   requirePermission(["schedules.create", "schedules.edit"]),
   schedulesController.swapPeriod,
 );
+router.post("/set-class-subject", schedulesController.setClassSubject);
 router.post(
   "/copy-week",
   requirePermission([

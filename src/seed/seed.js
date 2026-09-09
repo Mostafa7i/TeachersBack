@@ -120,7 +120,7 @@ const seedData = async () => {
     // 5) Seed Users
     console.log('👤 إنشاء حسابات المستخدمين...');
     const adminUser = await User.create({
-      name: 'أحمد الإداري (مدير النظام)',
+      name: '(مدير النظام)',
       email: 'admin@school.com',
       password: 'Admin@123456',
       role: superAdminRole._id,
@@ -134,26 +134,6 @@ const seedData = async () => {
       password: 'Teacher@123456',
       role: teacherRole._id,
       subjects: [digitalSubject._id],
-      isActive: true,
-      createdBy: adminUser._id,
-    });
-
-    const mathTeacher = await User.create({
-      name: 'أحمد محمد (معلم الرياضيات)',
-      email: 'math.teacher@school.com',
-      password: 'Teacher@123456',
-      role: teacherRole._id,
-      subjects: [mathSubject._id],
-      isActive: true,
-      createdBy: adminUser._id,
-    });
-
-    const scienceTeacher = await User.create({
-      name: 'سارة خالد (معلمة العلوم)',
-      email: 'science.teacher@school.com',
-      password: 'Teacher@123456',
-      role: teacherRole._id,
-      subjects: [scienceSubject._id],
       isActive: true,
       createdBy: adminUser._id,
     });

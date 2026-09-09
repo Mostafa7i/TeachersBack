@@ -470,9 +470,11 @@ exports.update = catchAsync(async (req, res) => {
     const userSubjectIds = (user.subjects || []).map((s) =>
       s._id ? s._id.toString() : s.toString(),
     );
-    const scheduleSubjectId = schedule.subject.toString();
+    const scheduleSubjectId = schedule.subject?.toString();
+    const isAssignedTeacher =
+      schedule.teacher && schedule.teacher.toString() === user._id.toString();
 
-    if (!userSubjectIds.includes(scheduleSubjectId)) {
+    if (!isAssignedTeacher && !userSubjectIds.includes(scheduleSubjectId)) {
       return error(
         res,
         "غير مصرح: لا يمكنك تعديل بيانات حصة لمادة لا تقوم بتدريسها.",
@@ -494,6 +496,7 @@ exports.update = catchAsync(async (req, res) => {
     period,
     day,
     dayDate,
+    applyToClass,
   } = req.body;
 
   if (hasFullEdit) {
@@ -508,8 +511,57 @@ exports.update = catchAsync(async (req, res) => {
     if (period !== undefined) schedule.period = period;
     if (day) schedule.day = day;
     if (dayDate) schedule.dayDate = new Date(dayDate);
+
+    if (applyToClass && schedule.className && subject) {
+      await Schedule.updateMany(
+        {
+          week: schedule.week,
+          teacher: schedule.teacher,
+          className: schedule.className,
+        },
+        {
+          $set: {
+            subject: subject,
+            updatedBy: user._id,
+          },
+        }
+      );
+    }
   } else {
     let modifiedAny = false;
+
+    // Allow teacher to change subject if it belongs to teacher's assigned subjects
+    if (subject !== undefined && subject) {
+      const userSubjectIds = (user.subjects || []).map((s) =>
+        s._id ? s._id.toString() : s.toString(),
+      );
+      if (!userSubjectIds.includes(subject.toString())) {
+        return error(
+          res,
+          "غير مصرح: المادة المختارة غير مسندة في حسابك التدريسي.",
+          403,
+        );
+      }
+      schedule.subject = subject;
+      modifiedAny = true;
+
+      // If requested, apply this subject to all periods of this class for this teacher
+      if (applyToClass && schedule.className) {
+        await Schedule.updateMany(
+          {
+            week: schedule.week,
+            teacher: schedule.teacher,
+            className: schedule.className,
+          },
+          {
+            $set: {
+              subject: subject,
+              updatedBy: user._id,
+            },
+          }
+        );
+      }
+    }
 
     if (lessonTitle !== undefined) {
       if (
@@ -619,6 +671,77 @@ exports.remove = catchAsync(async (req, res) => {
   });
 
   return success(res, null, "تم حذف الحصة بنجاح");
+});
+
+/**
+ * Set subject for all periods of a specific class for a teacher in a week
+ */
+exports.setClassSubject = catchAsync(async (req, res) => {
+  const { weekId, className, subjectId, teacherId } = req.body;
+  const user = req.user;
+  const isSuperAdmin = user.role?.isSystem;
+
+  if (!weekId || !className || !subjectId) {
+    return error(res, "الأسبوع واسم الفصل والمادة مطلوبة", 400);
+  }
+
+  // Determine target teacher
+  const targetTeacherId = isSuperAdmin && teacherId ? teacherId : user._id;
+
+  // If teacher, verify that subjectId is in teacher's assigned subjects
+  if (!isSuperAdmin) {
+    const userSubjectIds = (user.subjects || []).map((s) =>
+      s._id ? s._id.toString() : s.toString(),
+    );
+    if (!userSubjectIds.includes(subjectId.toString())) {
+      return error(res, "غير مصرح: المادة المختارة غير مسندة في حسابك", 403);
+    }
+  }
+
+  const subject = await Subject.findById(subjectId);
+  if (!subject) {
+    return error(res, "المادة المحددة غير موجودة", 404);
+  }
+
+  const result = await Schedule.updateMany(
+    {
+      week: weekId,
+      teacher: targetTeacherId,
+      className: className.trim(),
+    },
+    {
+      $set: {
+        subject: subjectId,
+        updatedBy: user._id,
+      },
+    }
+  );
+
+  const updatedSchedules = await Schedule.find({
+    week: weekId,
+    teacher: targetTeacherId,
+    className: className.trim(),
+  })
+    .populate("subject", "name code color")
+    .populate("teacher", "name email");
+
+  await createAuditLog({
+    req,
+    action: "UPDATE",
+    module: "schedules",
+    description: `تحديد مادة (${subject.name}) لجميع حصص فصل (${className}) للأسبوع.`,
+    targetId: targetTeacherId,
+    targetModel: "User",
+  });
+
+  return success(
+    res,
+    {
+      modifiedCount: result.modifiedCount,
+      schedules: updatedSchedules,
+    },
+    `تم تحديث مادة فصل (${className}) إلى (${subject.name}) بنجاح (${result.modifiedCount} حصة) ✅`
+  );
 });
 
 exports.copyWeek = catchAsync(async (req, res) => {
