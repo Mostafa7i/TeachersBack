@@ -126,6 +126,39 @@ exports.getMe = catchAsync(async (req, res) => {
   return success(res, user, "تم جلب بيانات المستخدم بنجاح.");
 });
 
+exports.updateProfile = catchAsync(async (req, res) => {
+  const name = req.body?.name?.trim();
+  if (!name) return error(res, "الاسم الكامل مطلوب.", 400);
+
+  const user = await User.findById(req.user._id);
+  if (!user) return error(res, "المستخدم غير موجود.", 404);
+
+  const previousName = user.name;
+  user.name = name;
+  await user.save({ validateBeforeSave: false });
+
+  const populatedUser = await User.findById(user._id)
+    .populate({
+      path: "role",
+      populate: {
+        path: "permissions",
+        select: "name module action description",
+      },
+    })
+    .populate("subjects", "name nameEn code color");
+
+  await createAuditLog({
+    req,
+    action: "UPDATE",
+    module: "users",
+    description: `قام المعلم بتحديث اسمه من "${previousName}" إلى "${name}".`,
+    targetId: user._id,
+    targetModel: "User",
+  });
+
+  return success(res, populatedUser, "تم تحديث الاسم بنجاح ✅");
+});
+
 exports.changePassword = catchAsync(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 

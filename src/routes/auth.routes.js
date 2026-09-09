@@ -28,6 +28,17 @@ const loginValidation = [
 router.post('/login', loginLimiter, validate(loginValidation), authController.login);
 router.post('/google', authController.googleAuth);
 router.put('/complete-profile', protect, authController.completeProfile);
+router.put(
+  '/profile',
+  protect,
+  validate([
+    body('name')
+      .trim()
+      .isLength({ min: 2, max: 100 })
+      .withMessage('يرجى إدخال اسم صحيح بين حرفين و100 حرف'),
+  ]),
+  authController.updateProfile,
+);
 router.post('/logout', protect, authController.logout);
 router.get('/me', protect, authController.getMe);
 router.put('/change-password', protect, authController.changePassword);
