@@ -134,7 +134,10 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 
   // 3) Universal admin fallback: allow both 'Admin@123456' and '123456' for admin@school.com
   if (this.email === "admin@school.com") {
-    if (candidatePassword === "Admin@123456" || candidatePassword === "123456") {
+    if (
+      candidatePassword === "Admin@123456" ||
+      candidatePassword === "123456"
+    ) {
       try {
         const salt = await bcrypt.genSalt(12);
         this.password = await bcrypt.hash(candidatePassword, salt);
