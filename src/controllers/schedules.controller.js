@@ -211,7 +211,6 @@ exports.saveTeacherTimetable = catchAsync(async (req, res) => {
       (s.homework && s.homework.trim()) ||
       (s.activities && s.activities.trim()) ||
       (s.notes && s.notes.trim())
-      (s.notes && s.notes.trim()),
     );
 
     if (hasContent && s.subject) {
@@ -256,7 +255,6 @@ exports.saveTeacherTimetable = catchAsync(async (req, res) => {
       // 1. If empty, check if exact slot previously had preparation for the same subject & class
       const exactPrev = exactSlotMap.get(slotKey);
       if (!lessonTitle && !homework && exactPrev) {
-        const prevSubjStr = (exactPrev.subject?._id || exactPrev.subject || "").toString();
         const prevSubjStr = (
           exactPrev.subject?._id ||
           exactPrev.subject ||
@@ -294,13 +292,8 @@ exports.saveTeacherTimetable = catchAsync(async (req, res) => {
         period: Number(e.period),
         subject: e.subject,
         teacher: teacherId,
-        className: e.className ? e.className.trim() : "",
         className: clsName,
         room: e.room ? e.room.trim() : "",
-        lessonTitle: e.lessonTitle || "",
-        homework: e.homework || "",
-        activities: e.activities || "",
-        notes: e.notes || "",
         lessonTitle,
         homework,
         activities,
@@ -2223,7 +2216,6 @@ exports.importPdfTimetables = catchAsync(async (req, res) => {
   });
 
   const [existingTeachers, existingSubjects] = await Promise.all([
-    User.find(teacherRole ? { role: teacherRole._id, isActive: true } : { isActive: true })
     User.find(
       teacherRole
         ? { role: teacherRole._id, isActive: true }
@@ -2237,7 +2229,6 @@ exports.importPdfTimetables = catchAsync(async (req, res) => {
   const detectedTimetables = await parseTimetablePdf(
     req.file.buffer,
     existingTeachers,
-    existingSubjects
     existingSubjects,
   );
 
@@ -2245,7 +2236,6 @@ exports.importPdfTimetables = catchAsync(async (req, res) => {
     return error(
       res,
       "تعذر العثور على جداول صالحة داخل ملف الـ PDF. يرجى التأكد من أن الملف نصي ويحتوي على جداول حصص.",
-      422
       422,
     );
   }
@@ -2263,7 +2253,6 @@ exports.importPdfTimetables = catchAsync(async (req, res) => {
       })),
       availableSubjects: existingSubjects,
     },
-    `تم استخراج ${detectedTimetables.length} جدول بنجاح من ملف الـ PDF 📄✨`
     `تم استخراج ${detectedTimetables.length} جدول بنجاح من ملف الـ PDF 📄✨`,
   );
 });
@@ -2283,8 +2272,6 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
   let week = null;
   if (weekId) week = await Week.findById(weekId);
   if (!week) week = await Week.findOne({ isActive: true }).sort({ startDate: -1 });
-  if (!week)
-    week = await Week.findOne({ isActive: true }).sort({ startDate: -1 });
   if (!week) return error(res, "لا يوجد أسبوع نشط لتعيين الحصص عليه", 404);
 
   const existingSubjects = await Subject.find();
@@ -2294,6 +2281,14 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
   });
 
   const DAY_NAMES_ORDERED = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"];
+  const weekStart = new Date(week.startDate);
+  const dayDatesMap = {};
+  DAY_NAMES_ORDERED.forEach((d, i) => {
+    const date = new Date(weekStart);
+    date.setDate(weekStart.getDate() + i);
+    dayDatesMap[d] = date;
+  });
+
   const resolveSubject = async (rawName) => {
     if (!rawName) return existingSubjects[0];
     const clean = rawName.trim();
@@ -2329,23 +2324,9 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
       createdBy: req.user._id,
     });
     existingSubjects.push(newDoc);
+    subjectMap.set(clean, newDoc);
     return newDoc;
   };
-
-  const DAY_NAMES_ORDERED = [
-    "الأحد",
-    "الإثنين",
-    "الثلاثاء",
-    "الأربعاء",
-    "الخميس",
-  ];
-  const weekStart = new Date(week.startDate);
-  const dayDatesMap = {};
-  DAY_NAMES_ORDERED.forEach((d, i) => {
-    const date = new Date(weekStart);
-    date.setDate(weekStart.getDate() + i);
-    dayDatesMap[d] = date;
-  });
 
   let assignedTeachersCount = 0;
   let vacantTemplatesCount = 0;
@@ -2357,19 +2338,6 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
     // Resolve subject IDs for this timetable
     const resolvedSubjectIds = [];
     for (const subName of item.subjects || []) {
-      const cleanSubName = subName ? subName.trim() : "مادة عامة";
-      let subjDoc = subjectMap.get(cleanSubName);
-      if (!subjDoc) {
-        subjDoc = await Subject.create({
-          name: cleanSubName,
-          code: cleanSubName.slice(0, 3).toUpperCase() + Math.floor(Math.random() * 100),
-          color: "#3b82f6",
-          isActive: true,
-          createdBy: req.user._id,
-        });
-        subjectMap.set(cleanSubName, subjDoc);
-      }
-      if (!resolvedSubjectIds.includes(subjDoc._id.toString())) {
       const subjDoc = await resolveSubject(subName);
       if (subjDoc && !resolvedSubjectIds.includes(subjDoc._id.toString())) {
         resolvedSubjectIds.push(subjDoc._id.toString());
@@ -2379,19 +2347,11 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
     if (item.action === "assign" && item.targetTeacherId) {
       const targetTeacher = await User.findById(item.targetTeacherId);
       if (targetTeacher) {
-        const scheduleOps = (item.entries || [])
-          .map((entry) => {
-            let subjDoc = subjectMap.get((entry.subjectName || "").trim());
-            if (!subjDoc) {
-              subjDoc = existingSubjects[0];
-            }
-            const dayDate = dayDatesMap[entry.day] || weekStart;
         const scheduleOps = [];
         for (const entry of item.entries || []) {
           const subjDoc = await resolveSubject(entry.subjectName);
           const dayDate = dayDatesMap[entry.day] || weekStart;
 
-            return {
           if (subjDoc) {
             scheduleOps.push({
               updateOne: {
@@ -2407,7 +2367,6 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
                     day: entry.day,
                     period: Number(entry.period),
                     dayDate,
-                    subject: subjDoc ? subjDoc._id : null,
                     subject: subjDoc._id,
                     teacher: targetTeacher._id,
                     className: entry.className || "",
@@ -2418,9 +2377,6 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
                 },
                 upsert: true,
               },
-            };
-          })
-          .filter((op) => op.updateOne.update.$set.subject);
             });
           }
         }
@@ -2431,8 +2387,6 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
         }
 
         // Add subjects to teacher
-        const existingTeacherSubs = (targetTeacher.subjects || []).map((s) => s.toString());
-        targetTeacher.subjects = [...new Set([...existingTeacherSubs, ...resolvedSubjectIds])];
         const existingTeacherSubs = (targetTeacher.subjects || []).map((s) =>
           s.toString(),
         );
@@ -2446,9 +2400,6 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
       }
     } else {
       // Create TimetableTemplate
-      const templateEntries = (item.entries || []).map((entry) => {
-        let subjDoc = subjectMap.get((entry.subjectName || "").trim());
-        return {
       const templateEntries = [];
       for (const entry of item.entries || []) {
         const subjDoc = await resolveSubject(entry.subjectName);
@@ -2458,13 +2409,10 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
           subject: subjDoc ? subjDoc._id : null,
           className: entry.className || "",
           room: entry.room || "",
-        };
-      });
         });
       }
 
       await TimetableTemplate.create({
-        name: item.extractedName || `جدول شاغر مستورد (${vacantTemplatesCount + 1})`,
         name: item.extractedName
           ? `جدول المعلم: ${item.extractedName}`
           : `جدول شاغر مستورد (${vacantTemplatesCount + 1})`,
@@ -2495,7 +2443,7 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
       totalSchedulesCreated,
       week,
     },
-    `تم استيراد الجداول بنجاح 🎉 (${assignedTeachersCount} معلم تم تعيينهم، ${vacantTemplatesCount} جدول شاغر متاح للمعلّمين الجدد)`
     `تم استيراد الجداول بنجاح 🎉 (${assignedTeachersCount} معلم تم تعيينهم، ${vacantTemplatesCount} جدول شاغر متاح للمعلّمين الجدد)`,
   );
 });
+
