@@ -210,7 +210,7 @@ exports.saveTeacherTimetable = catchAsync(async (req, res) => {
       (s.lessonTitle && s.lessonTitle.trim()) ||
       (s.homework && s.homework.trim()) ||
       (s.activities && s.activities.trim()) ||
-      (s.notes && s.notes.trim())
+      (s.notes && s.notes.trim()),
     );
 
     if (hasContent && s.subject) {
@@ -517,7 +517,7 @@ exports.update = catchAsync(async (req, res) => {
             subject: subject,
             updatedBy: user._id,
           },
-        }
+        },
       );
     }
   } else {
@@ -551,7 +551,7 @@ exports.update = catchAsync(async (req, res) => {
               subject: subject,
               updatedBy: user._id,
             },
-          }
+          },
         );
       }
     }
@@ -707,7 +707,7 @@ exports.setClassSubject = catchAsync(async (req, res) => {
         subject: subjectId,
         updatedBy: user._id,
       },
-    }
+    },
   );
 
   const updatedSchedules = await Schedule.find({
@@ -733,7 +733,7 @@ exports.setClassSubject = catchAsync(async (req, res) => {
       modifiedCount: result.modifiedCount,
       schedules: updatedSchedules,
     },
-    `تم تحديث مادة فصل (${className}) إلى (${subject.name}) بنجاح (${result.modifiedCount} حصة) ✅`
+    `تم تحديث مادة فصل (${className}) إلى (${subject.name}) بنجاح (${result.modifiedCount} حصة) ✅`,
   );
 });
 
@@ -1098,8 +1098,7 @@ exports.swapPeriod = catchAsync(async (req, res) => {
     return success(
       res,
       { mode: "move", source: populated, target: null },
-      `تم نقل الحصة بنجاح إلى يوم ${toDay} (الحصة ${toPeriod}) مع الحفاظ التام على التحضير والواجبات ✅`
-      `تم نقل الحصة بنجاح إلى يوم ${toDay} (الحصة ${toPeriod}) مع الحفاظ التام على التحضير والواجبات ✅`,
+      `تم نقل الحصة بنجاح إلى يوم ${toDay} (الحصة ${toPeriod}) مع الحفاظ التام على التحضير والواجبات ✅``تم نقل الحصة بنجاح إلى يوم ${toDay} (الحصة ${toPeriod}) مع الحفاظ التام على التحضير والواجبات ✅`,
     );
   } else {
     // SWAP: Target exists -> swap day, period, and date
@@ -1136,8 +1135,7 @@ exports.swapPeriod = catchAsync(async (req, res) => {
     return success(
       res,
       { mode: "swap", source: popSource, target: popTarget },
-      `تم تبديل الحصتين بنجاح مع الحفاظ التام على تحضير وواجبات كل منهما ✅`
-      `تم تبديل الحصتين بنجاح مع الحفاظ التام على تحضير وواجبات كل منهما ✅`,
+      `تم تبديل الحصتين بنجاح مع الحفاظ التام على تحضير وواجبات كل منهما ✅``تم تبديل الحصتين بنجاح مع الحفاظ التام على تحضير وواجبات كل منهما ✅`,
     );
   }
 });
@@ -2271,7 +2269,8 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
   // Resolve week
   let week = null;
   if (weekId) week = await Week.findById(weekId);
-  if (!week) week = await Week.findOne({ isActive: true }).sort({ startDate: -1 });
+  if (!week)
+    week = await Week.findOne({ isActive: true }).sort({ startDate: -1 });
   if (!week) return error(res, "لا يوجد أسبوع نشط لتعيين الحصص عليه", 404);
 
   const existingSubjects = await Subject.find();
@@ -2280,7 +2279,13 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
     subjectMap.set(s.name.trim(), s);
   });
 
-  const DAY_NAMES_ORDERED = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"];
+  const DAY_NAMES_ORDERED = [
+    "الأحد",
+    "الإثنين",
+    "الثلاثاء",
+    "الأربعاء",
+    "الخميس",
+  ];
   const weekStart = new Date(week.startDate);
   const dayDatesMap = {};
   DAY_NAMES_ORDERED.forEach((d, i) => {
@@ -2446,4 +2451,3 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
     `تم استيراد الجداول بنجاح 🎉 (${assignedTeachersCount} معلم تم تعيينهم، ${vacantTemplatesCount} جدول شاغر متاح للمعلّمين الجدد)`,
   );
 });
-
