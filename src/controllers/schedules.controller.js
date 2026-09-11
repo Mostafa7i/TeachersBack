@@ -2451,3 +2451,51 @@ exports.confirmImportPdf = catchAsync(async (req, res) => {
     `تم استيراد الجداول بنجاح 🎉 (${assignedTeachersCount} معلم تم تعيينهم، ${vacantTemplatesCount} جدول شاغر متاح للمعلّمين الجدد)`,
   );
 });
+
+/**
+ * POST /api/schedules/bulk-update-lessons
+ * Fast bulk update for lessonTitle, homework, activities, notes across multiple schedules
+ */
+exports.bulkUpdateLessons = catchAsync(async (req, res) => {
+  const { updates } = req.body;
+  if (!Array.isArray(updates) || updates.length === 0) {
+    return error(res, "لا توجد تعديلات للحفظ", 400);
+  }
+
+  const user = req.user;
+  const isSuperAdmin = user.role?.isSystem || false;
+
+  const ops = [];
+  for (const item of updates) {
+    if (!item.id) continue;
+
+    const filter = { _id: item.id };
+    if (!isSuperAdmin) {
+      filter.teacher = user._id;
+    }
+
+    const setFields = { updatedBy: user._id };
+    if (item.lessonTitle !== undefined)
+      setFields.lessonTitle = item.lessonTitle;
+    if (item.homework !== undefined) setFields.homework = item.homework;
+    if (item.activities !== undefined) setFields.activities = item.activities;
+    if (item.notes !== undefined) setFields.notes = item.notes;
+
+    ops.push({
+      updateOne: {
+        filter,
+        update: { $set: setFields },
+      },
+    });
+  }
+
+  if (ops.length > 0) {
+    await Schedule.bulkWrite(ops);
+  }
+
+  return success(
+    res,
+    { updatedCount: ops.length },
+    "تم حفظ جميع التعديلات في الخطة بنجاح ✅",
+  );
+});

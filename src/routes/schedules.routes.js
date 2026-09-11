@@ -80,6 +80,7 @@ router.post(
   schedulesController.swapPeriod,
 );
 router.post("/set-class-subject", schedulesController.setClassSubject);
+router.post("/bulk-update-lessons", schedulesController.bulkUpdateLessons);
 router.post(
   "/copy-week",
   requirePermission([
