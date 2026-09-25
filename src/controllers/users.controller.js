@@ -34,8 +34,7 @@ exports.getAll = catchAsync(async (req, res) => {
       .populate("subjects", "name code color")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit)
-      .lean(),
+      .limit(limit),
     User.countDocuments(query),
   ]);
 
@@ -51,7 +50,7 @@ exports.getTeachers = catchAsync(async (req, res) => {
   // Find roles that might be teacher roles or list all active users with subjects assigned
   const teacherRoles = await Role.find({
     name: { $regex: /معلم|teacher/i },
-  }).select("_id").lean();
+  }).select("_id");
 
   const roleIds = teacherRoles.map((r) => r._id);
 
@@ -63,8 +62,7 @@ exports.getTeachers = catchAsync(async (req, res) => {
   const teachers = await User.find(query)
     .populate("role", "name description")
     .populate("subjects", "name code color")
-    .sort({ name: 1 })
-    .lean();
+    .sort({ name: 1 });
 
   return success(res, teachers, "تم جلب قائمة المعلمين بنجاح");
 });
@@ -78,8 +76,7 @@ exports.getById = catchAsync(async (req, res) => {
         select: "name module action",
       },
     })
-    .populate("subjects", "name code color")
-    .lean();
+    .populate("subjects", "name code color");
 
   if (!user) {
     return error(res, "المستخدم غير موجود", 404);

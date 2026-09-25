@@ -101,12 +101,7 @@ const scheduleSchema = new mongoose.Schema(
   }
 );
 
-// Indexes for high performance querying
-scheduleSchema.index({ week: 1, teacher: 1 });
-scheduleSchema.index({ week: 1, className: 1 });
-scheduleSchema.index({ week: 1, subject: 1 });
-scheduleSchema.index({ week: 1, day: 1, period: 1 });
-scheduleSchema.index({ teacher: 1 });
+// Compound index to quickly find cells and avoid duplicates per week+day+period+teacher
 scheduleSchema.index({ week: 1, day: 1, period: 1, teacher: 1 });
 scheduleSchema.index({ week: 1, day: 1, period: 1, subject: 1 });
 

@@ -21,12 +21,12 @@ exports.getAll = catchAsync(async (req, res) => {
     ];
   }
 
-  const subjects = await Subject.find(query).sort({ name: 1 }).lean();
+  const subjects = await Subject.find(query).sort({ name: 1 });
   return success(res, subjects, "تم جلب قائمة المواد بنجاح");
 });
 
 exports.getById = catchAsync(async (req, res) => {
-  const subject = await Subject.findById(req.params.id).lean();
+  const subject = await Subject.findById(req.params.id);
   if (!subject) {
     return error(res, "المادة غير موجودة", 404);
   }
