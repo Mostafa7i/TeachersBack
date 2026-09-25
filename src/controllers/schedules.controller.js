@@ -479,6 +479,10 @@ exports.update = catchAsync(async (req, res) => {
   const oldValue = { ...schedule.toObject() };
   const {
     lessonTitle,
+    warmUp,
+    vocabulary,
+    teachingAids,
+    objectives,
     homework,
     activities,
     notes,
@@ -494,6 +498,10 @@ exports.update = catchAsync(async (req, res) => {
 
   if (hasFullEdit) {
     if (lessonTitle !== undefined) schedule.lessonTitle = lessonTitle;
+    if (warmUp !== undefined) schedule.warmUp = warmUp;
+    if (vocabulary !== undefined) schedule.vocabulary = vocabulary;
+    if (teachingAids !== undefined) schedule.teachingAids = teachingAids;
+    if (objectives !== undefined) schedule.objectives = objectives;
     if (homework !== undefined) schedule.homework = homework;
     if (activities !== undefined) schedule.activities = activities;
     if (notes !== undefined) schedule.notes = notes;
@@ -568,6 +576,26 @@ exports.update = catchAsync(async (req, res) => {
         );
       }
       schedule.lessonTitle = lessonTitle;
+      modifiedAny = true;
+    }
+
+    if (warmUp !== undefined) {
+      schedule.warmUp = warmUp;
+      modifiedAny = true;
+    }
+
+    if (vocabulary !== undefined) {
+      schedule.vocabulary = vocabulary;
+      modifiedAny = true;
+    }
+
+    if (teachingAids !== undefined) {
+      schedule.teachingAids = teachingAids;
+      modifiedAny = true;
+    }
+
+    if (objectives !== undefined) {
+      schedule.objectives = objectives;
       modifiedAny = true;
     }
 
@@ -2477,6 +2505,10 @@ exports.bulkUpdateLessons = catchAsync(async (req, res) => {
     const setFields = { updatedBy: user._id };
     if (item.lessonTitle !== undefined)
       setFields.lessonTitle = item.lessonTitle;
+    if (item.warmUp !== undefined) setFields.warmUp = item.warmUp;
+    if (item.vocabulary !== undefined) setFields.vocabulary = item.vocabulary;
+    if (item.teachingAids !== undefined) setFields.teachingAids = item.teachingAids;
+    if (item.objectives !== undefined) setFields.objectives = item.objectives;
     if (item.homework !== undefined) setFields.homework = item.homework;
     if (item.activities !== undefined) setFields.activities = item.activities;
     if (item.notes !== undefined) setFields.notes = item.notes;

@@ -52,20 +52,40 @@ const scheduleSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
-    homework: {
+    warmUp: {
       type: String,
       trim: true,
-      default: '',
+      default: '', // التهيئة للحصة
+    },
+    vocabulary: {
+      type: String,
+      trim: true,
+      default: '', // مفردات الدرس
+    },
+    teachingAids: {
+      type: String,
+      trim: true,
+      default: '', // الوسائل التعليمية ومصادر التعلم
+    },
+    objectives: {
+      type: String,
+      trim: true,
+      default: '', // أهداف الدرس ونواتج التعلم
     },
     activities: {
       type: String,
       trim: true,
-      default: '',
+      default: '', // النشاط الصفي
+    },
+    homework: {
+      type: String,
+      trim: true,
+      default: '', // الواجب المنزلي
     },
     notes: {
       type: String,
       trim: true,
-      default: '',
+      default: '', // ملاحظات
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
