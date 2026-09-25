@@ -80,6 +80,7 @@ app.use("/api/schedules", require("./routes/schedules.routes"));
 app.use("/api/school-settings", require("./routes/schoolSettings.routes"));
 app.use("/api/audit-logs", require("./routes/auditLogs.routes"));
 app.use("/api/notifications", require("./routes/notifications.routes"));
+app.use("/api/feedback", require("./routes/feedback.routes"));
 
 // 9) 404 Route Handler
 app.all("*", (req, res) => {
