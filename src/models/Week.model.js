@@ -41,5 +41,6 @@ const weekSchema = new mongoose.Schema(
 );
 
 weekSchema.index({ academicYear: 1, weekNumber: 1 }, { unique: true });
+weekSchema.index({ startDate: -1 });
 
 module.exports = mongoose.model('Week', weekSchema);

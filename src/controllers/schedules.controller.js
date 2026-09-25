@@ -54,7 +54,8 @@ exports.getByWeek = catchAsync(async (req, res) => {
   const schedules = await Schedule.find(query)
     .populate("subject", "name nameEn code color")
     .populate("teacher", "name email")
-    .sort({ day: 1, period: 1 });
+    .sort({ day: 1, period: 1 })
+    .lean();
 
   return success(
     res,
@@ -75,14 +76,14 @@ exports.getForTeacher = catchAsync(async (req, res) => {
   if (!targetWeekId) {
     const currentWeek = await Week.findOne({ isActive: true }).sort({
       startDate: -1,
-    });
+    }).lean();
     if (!currentWeek) {
       return error(res, "لا يوجد أسبوع دراسي نشط", 404);
     }
     targetWeekId = currentWeek._id;
   }
 
-  const week = await Week.findById(targetWeekId);
+  const week = await Week.findById(targetWeekId).lean();
   if (!week) {
     return error(res, "الأسبوع غير موجود", 404);
   }
@@ -99,9 +100,6 @@ exports.getForTeacher = catchAsync(async (req, res) => {
   }
 
   // Find schedules assigned to this teacher or matching their subjects for this week
-  // A teacher's timetable and weekly plan must only contain slots assigned to
-  // that teacher. Matching by subject here would expose other teachers' slots
-  // (and let them appear as preparation work for the current teacher).
   const schedules = await Schedule.find({
     week: targetWeekId,
     $or: orConditions,
@@ -109,7 +107,8 @@ exports.getForTeacher = catchAsync(async (req, res) => {
   })
     .populate("subject", "name nameEn code color")
     .populate("teacher", "name email")
-    .sort({ day: 1, period: 1 });
+    .sort({ day: 1, period: 1 })
+    .lean();
 
   return success(
     res,
@@ -129,7 +128,8 @@ exports.getTeacherTimetable = catchAsync(async (req, res) => {
 
   const targetTeacher = await User.findById(teacherId)
     .populate("subjects", "name code color")
-    .populate("role", "name");
+    .populate("role", "name")
+    .lean();
 
   if (!targetTeacher) {
     return error(res, "المعلم غير موجود", 404);
@@ -139,14 +139,14 @@ exports.getTeacherTimetable = catchAsync(async (req, res) => {
   if (!targetWeekId) {
     const currentWeek = await Week.findOne({ isActive: true }).sort({
       startDate: -1,
-    });
+    }).lean();
     if (!currentWeek) {
       return error(res, "لا يوجد أسبوع دراسي مسجل", 404);
     }
     targetWeekId = currentWeek._id;
   }
 
-  const week = await Week.findById(targetWeekId);
+  const week = await Week.findById(targetWeekId).lean();
   if (!week) {
     return error(res, "الأسبوع غير موجود", 404);
   }
@@ -157,7 +157,8 @@ exports.getTeacherTimetable = catchAsync(async (req, res) => {
   })
     .populate("subject", "name nameEn code color")
     .populate("teacher", "name email")
-    .sort({ day: 1, period: 1 });
+    .sort({ day: 1, period: 1 })
+    .lean();
 
   return success(
     res,

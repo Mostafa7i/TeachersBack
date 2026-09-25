@@ -13,7 +13,7 @@ exports.getAll = catchAsync(async (req, res) => {
     query.isActive = req.query.isActive === "true";
   }
 
-  const weeks = await Week.find(query).sort({ startDate: 1 });
+  const weeks = await Week.find(query).sort({ startDate: 1 }).lean();
   return success(res, weeks, "تم جلب قائمة الأسابيع بنجاح");
 });
 
@@ -25,11 +25,11 @@ exports.getCurrent = catchAsync(async (req, res) => {
     startDate: { $lte: now },
     endDate: { $gte: now },
     isActive: true,
-  });
+  }).lean();
 
   // If not found, find the latest active week or nearest upcoming
   if (!week) {
-    week = await Week.findOne({ isActive: true }).sort({ startDate: -1 });
+    week = await Week.findOne({ isActive: true }).sort({ startDate: -1 }).lean();
   }
 
   // If still no weeks exist at all, return null
@@ -41,7 +41,7 @@ exports.getCurrent = catchAsync(async (req, res) => {
 });
 
 exports.getById = catchAsync(async (req, res) => {
-  const week = await Week.findById(req.params.id);
+  const week = await Week.findById(req.params.id).lean();
   if (!week) {
     return error(res, "الأسبوع غير موجود", 404);
   }

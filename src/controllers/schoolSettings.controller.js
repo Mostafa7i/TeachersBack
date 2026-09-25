@@ -4,7 +4,7 @@ const { success, error } = require("../utils/apiResponse");
 const { createAuditLog } = require("../middleware/auditLog.middleware");
 
 exports.getSettings = catchAsync(async (req, res) => {
-  let settings = await SchoolSettings.findOne();
+  let settings = await SchoolSettings.findOne().lean();
   if (!settings) {
     settings = await SchoolSettings.create({
       schoolName: "مدرسة المستقبل النموذجية",
