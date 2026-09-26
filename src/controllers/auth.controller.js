@@ -306,6 +306,7 @@ exports.googleAuth = catchAsync(async (req, res) => {
       isProfileComplete: false,
       subjects: [],
       phone: "",
+      lastLogin: new Date(),
     });
 
     user = await User.findById(user._id)
@@ -354,10 +355,9 @@ exports.googleAuth = catchAsync(async (req, res) => {
       }
     }
 
+    // Always persist the login timestamp, even when no other profile field changed.
     user.lastLogin = new Date();
-    if (needsSave) {
-      await user.save({ validateBeforeSave: false });
-    }
+    await user.save({ validateBeforeSave: false });
 
     await createAuditLog({
       req: { ...req, user },
