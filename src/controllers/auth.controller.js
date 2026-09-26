@@ -1,4 +1,4 @@
-const jwt = require("jsonwebtoken");
+﻿const jwt = require("jsonwebtoken");
 const User = require("../models/User.model");
 const Role = require("../models/Role.model");
 const Subject = require("../models/Subject.model");
@@ -128,13 +128,25 @@ exports.getMe = catchAsync(async (req, res) => {
 
 exports.updateProfile = catchAsync(async (req, res) => {
   const name = req.body?.name?.trim();
-  if (!name) return error(res, "الاسم الكامل مطلوب.", 400);
+  if (!name) return error(res, "الاسم مطلوب.", 400);
+
+  const { phone, subjectIds } = req.body;
 
   const user = await User.findById(req.user._id);
   if (!user) return error(res, "المستخدم غير موجود.", 404);
 
   const previousName = user.name;
   user.name = name;
+
+  if (phone !== undefined) {
+    user.phone = typeof phone === "string" ? phone.trim() : "";
+  }
+
+  if (Array.isArray(subjectIds)) {
+    const validSubjects = await Subject.find({ _id: { $in: subjectIds } }).select("_id");
+    user.subjects = validSubjects.map((s) => s._id);
+  }
+
   await user.save({ validateBeforeSave: false });
 
   const populatedUser = await User.findById(user._id)
@@ -151,12 +163,12 @@ exports.updateProfile = catchAsync(async (req, res) => {
     req,
     action: "UPDATE",
     module: "users",
-    description: `قام المعلم بتحديث اسمه من "${previousName}" إلى "${name}".`,
+    description: `profile updated: ${previousName} -> ${name}`,
     targetId: user._id,
     targetModel: "User",
   });
 
-  return success(res, populatedUser, "تم تحديث الاسم بنجاح ✅");
+  return success(res, populatedUser, "تم تحديث الملف الشخصي بنجاح");
 });
 
 exports.changePassword = catchAsync(async (req, res) => {
