@@ -78,6 +78,7 @@ app.use("/api/permissions", require("./routes/permissions.routes"));
 app.use("/api/subjects", require("./routes/subjects.routes"));
 app.use("/api/weeks", require("./routes/weeks.routes"));
 app.use("/api/schedules", require("./routes/schedules.routes"));
+app.use("/api/ai", require("./routes/ai.routes"));
 app.use("/api/school-settings", require("./routes/schoolSettings.routes"));
 app.use("/api/audit-logs", require("./routes/auditLogs.routes"));
 app.use("/api/notifications", require("./routes/notifications.routes"));
