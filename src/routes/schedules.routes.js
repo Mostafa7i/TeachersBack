@@ -90,7 +90,6 @@ router.post(
   ]),
   schedulesController.copyWeek,
 );
-
 router.post(
   "/import-pdf",
   requirePermission(["schedules.create", "schedules.edit"]),
