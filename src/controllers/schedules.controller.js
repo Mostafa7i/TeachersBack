@@ -1176,48 +1176,33 @@ const extractGradePrefix = (className) => {
   if (!className) return "";
   let name = String(className).trim();
 
-  // Normalize arabic diacritics and letters
+  // Normalize: remove harakat, unify alef variants, ta marbuta
   name = name
     .normalize("NFKC")
-    .replace(/[\u064B-\u065F\u0670]/g, "") // remove harakat
+    .replace(/[\u064B-\u065F\u0670]/g, "")
     .replace(/[إأآا]/g, "ا")
     .replace(/ى/g, "ي")
     .replace(/ة/g, "ه");
 
-  // Remove common prefixes
+  // Remove common grade-prefix words
   name = name.replace(/^(فصل|الصف|صف)\s+/, "");
 
-  // Check Grade 1: اول, اولي, 1
-  if (/^(اول|اولي|1)(\b|[\s\/\-_])/.test(name) || name === "اول" || name === "اولي") {
-    return "grade-1";
-  }
-  // Check Grade 2: ثاني, ثانيه, 2
-  if (/^(ثاني|ثانيه|2)(\b|[\s\/\-_])/.test(name) || name === "ثاني" || name === "ثانيه") {
-    return "grade-2";
-  }
-  // Check Grade 3: ثالث, ثالثه, 3
-  if (/^(ثالث|ثالثه|3)(\b|[\s\/\-_])/.test(name) || name === "ثالث" || name === "ثالثه") {
-    return "grade-3";
-  }
-  // Check Grade 4: رابع, رابعه, 4
-  if (/^(رابع|رابعه|4)(\b|[\s\/\-_])/.test(name) || name === "رابع" || name === "رابعه") {
-    return "grade-4";
-  }
-  // Check Grade 5: خامس, خامسه, 5
-  if (/^(خامس|خامسه|5)(\b|[\s\/\-_])/.test(name) || name === "خامس" || name === "خامسه") {
-    return "grade-5";
-  }
-  // Check Grade 6: سادس, سادسه, 6
-  if (/^(سادس|سادسه|6)(\b|[\s\/\-_])/.test(name) || name === "سادس" || name === "سادسه") {
-    return "grade-6";
-  }
+  if (/^(اول|اولي|1)(\b|[\s\/\-_])/.test(name) || name === "اول" || name === "اولي") return "grade-1";
+  if (/^(ثاني|ثانيه|2)(\b|[\s\/\-_])/.test(name) || name === "ثاني" || name === "ثانيه") return "grade-2";
+  if (/^(ثالث|ثالثه|3)(\b|[\s\/\-_])/.test(name) || name === "ثالث" || name === "ثالثه") return "grade-3";
+  if (/^(رابع|رابعه|4)(\b|[\s\/\-_])/.test(name) || name === "رابع" || name === "رابعه") return "grade-4";
+  if (/^(خامس|خامسه|5)(\b|[\s\/\-_])/.test(name) || name === "خامس" || name === "خامسه") return "grade-5";
+  if (/^(سادس|سادسه|6)(\b|[\s\/\-_])/.test(name) || name === "سادس" || name === "سادسه") return "grade-6";
+  if (/^(سابع|سابعه|7)(\b|[\s\/\-_])/.test(name) || name === "سابع" || name === "سابعه") return "grade-7";
+  if (/^(ثامن|ثامنه|8)(\b|[\s\/\-_])/.test(name) || name === "ثامن" || name === "ثامنه") return "grade-8";
+  if (/^(تاسع|تاسعه|9)(\b|[\s\/\-_])/.test(name) || name === "تاسع" || name === "تاسعه") return "grade-9";
+  if (/^(عاشر|عاشره|10)(\b|[\s\/\-_])/.test(name) || name === "عاشر" || name === "عاشره") return "grade-10";
 
-  // General numbers: e.g. "7/1", "8/2"
+  // Numeric: "1/1", "2/3", "10/2"
   const numMatch = name.match(/^(\d+)/);
-  if (numMatch) {
-    return `grade-${numMatch[1]}`;
-  }
+  if (numMatch) return `grade-${numMatch[1]}`;
 
+  // Fallback: first word
   const parts = name.split(/[\s\/\-_]+/);
   return parts[0] || name;
 };
@@ -1272,23 +1257,16 @@ exports.bulkFillGrade = catchAsync(async (req, res) => {
     return error(res, "لا يمكن تحديد الصف الدراسي من اسم الفصل", 400);
   }
 
-  // Build query for matching target schedules in the same week
+  // Build query: same week, same subject — no teacher restriction.
+  // A teacher filling "ثالث أول" should be able to propagate to "ثالث ثاني"
+  // even if that section is assigned to a different teacher (same subject).
   const query = {
     week: source.week,
     _id: { $ne: source._id },
   };
 
-  // Restrict to same subject
   if (source.subject) {
     query.subject = source.subject._id || source.subject;
-  }
-
-  // If teacher (not admin), only touch their own schedules
-  if (!isSuperAdmin) {
-    query.$or = [
-      { teacher: user._id },
-      { subject: source.subject._id || source.subject },
-    ];
   }
 
   // If scope is 'day', restrict to the same day
@@ -1300,7 +1278,7 @@ exports.bulkFillGrade = catchAsync(async (req, res) => {
     .populate("subject", "name nameEn code color")
     .populate("teacher", "name email");
 
-  // Filter candidates that match the same grade prefix
+  // Filter candidates that share the same grade prefix
   const targets = candidates.filter((s) => {
     const candidateGrade = extractGradePrefix(s.className || "");
     return (
@@ -2504,32 +2482,15 @@ exports.bulkUpdateLessons = catchAsync(async (req, res) => {
   }
 
   const user = req.user;
-  const userRole = user.role;
-  const isSuperAdmin = Boolean(
-    userRole?.isSystem ||
-    userRole?.name === "super_admin" ||
-    userRole?.name === "admin"
-  );
-  const userPermNames = (userRole?.permissions || []).map((p) =>
-    typeof p === "string" ? p : p.name,
-  );
-  const hasFullEdit = isSuperAdmin || userPermNames.includes("schedules.edit");
-
-  const userSubjectIds = (user.subjects || []).map((s) =>
-    s._id ? s._id.toString() : s.toString(),
-  );
+  const isSuperAdmin = user.role?.isSystem || false;
 
   const ops = [];
   for (const item of updates) {
     if (!item.id) continue;
 
     const filter = { _id: item.id };
-    if (!hasFullEdit) {
-      const conditions = [{ teacher: user._id }];
-      if (userSubjectIds.length > 0) {
-        conditions.push({ subject: { $in: userSubjectIds } });
-      }
-      filter.$or = conditions;
+    if (!isSuperAdmin) {
+      filter.teacher = user._id;
     }
 
     const setFields = { updatedBy: user._id };

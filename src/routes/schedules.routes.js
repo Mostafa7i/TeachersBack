@@ -96,6 +96,8 @@ router.post(
     "schedules.edit",
     "schedules.edit_title",
     "schedules.edit_homework",
+    "schedules.edit_activities",
+    "schedules.edit_notes",
   ]),
   schedulesController.bulkFillGrade,
 );
