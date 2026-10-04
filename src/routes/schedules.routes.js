@@ -90,17 +90,7 @@ router.post(
   ]),
   schedulesController.copyWeek,
 );
-router.post(
-  "/bulk-fill-grade",
-  requirePermission([
-    "schedules.edit",
-    "schedules.edit_title",
-    "schedules.edit_homework",
-    "schedules.edit_activities",
-    "schedules.edit_notes",
-  ]),
-  schedulesController.bulkFillGrade,
-);
+
 router.post(
   "/import-pdf",
   requirePermission(["schedules.create", "schedules.edit"]),
