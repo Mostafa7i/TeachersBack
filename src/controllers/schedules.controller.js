@@ -1174,39 +1174,52 @@ exports.swapPeriod = catchAsync(async (req, res) => {
  */
 const extractGradePrefix = (className) => {
   if (!className) return "";
-  const cleaned = className.trim();
+  let name = String(className).trim();
 
-  // "الصف الأول", "الصف الثاني", ...
-  const fullMatch = cleaned.match(
-    /^(الصف\s+(?:الأول|الثاني|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر|الحادي\s+عشر|الثاني\s+عشر))/i,
-  );
-  if (fullMatch) return fullMatch[1];
+  // Normalize arabic diacritics and letters
+  name = name
+    .normalize("NFKC")
+    .replace(/[\u064B-\u065F\u0670]/g, "") // remove harakat
+    .replace(/[إأآا]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه");
 
-  // "أولى", "أول", "ثاني", "ثالث", "رابع", "خامس", "سادس", "سابع", "ثامن", "تاسع", "عاشر"
-  const wordMatch = cleaned.match(
-    /^(أولى|أول|ثانية|ثاني|ثالثة|ثالث|رابعة|رابع|خامسة|خامس|سادسة|سادس|سابعة|سابع|ثامنة|ثامن|تاسعة|تاسع|عاشرة|عاشر)/i,
-  );
-  if (wordMatch) {
-    const map = {
-      أولى: "أول",
-      ثانية: "ثاني",
-      ثالثة: "ثالث",
-      رابعة: "رابع",
-      خامسة: "خامس",
-      سادسة: "سادس",
-    };
-    return map[wordMatch[1]] || wordMatch[1];
+  // Remove common prefixes
+  name = name.replace(/^(فصل|الصف|صف)\s+/, "");
+
+  // Check Grade 1: اول, اولي, 1
+  if (/^(اول|اولي|1)(\b|[\s\/\-_])/.test(name) || name === "اول" || name === "اولي") {
+    return "grade-1";
+  }
+  // Check Grade 2: ثاني, ثانيه, 2
+  if (/^(ثاني|ثانيه|2)(\b|[\s\/\-_])/.test(name) || name === "ثاني" || name === "ثانيه") {
+    return "grade-2";
+  }
+  // Check Grade 3: ثالث, ثالثه, 3
+  if (/^(ثالث|ثالثه|3)(\b|[\s\/\-_])/.test(name) || name === "ثالث" || name === "ثالثه") {
+    return "grade-3";
+  }
+  // Check Grade 4: رابع, رابعه, 4
+  if (/^(رابع|رابعه|4)(\b|[\s\/\-_])/.test(name) || name === "رابع" || name === "رابعه") {
+    return "grade-4";
+  }
+  // Check Grade 5: خامس, خامسه, 5
+  if (/^(خامس|خامسه|5)(\b|[\s\/\-_])/.test(name) || name === "خامس" || name === "خامسه") {
+    return "grade-5";
+  }
+  // Check Grade 6: سادس, سادسه, 6
+  if (/^(سادس|سادسه|6)(\b|[\s\/\-_])/.test(name) || name === "سادس" || name === "سادسه") {
+    return "grade-6";
   }
 
-  // Numbers: "1/1", "1-A", "2/3" -> "1", "2"
-  const numMatch = cleaned.match(/^(\d+)/);
-  if (numMatch) return numMatch[1];
+  // General numbers: e.g. "7/1", "8/2"
+  const numMatch = name.match(/^(\d+)/);
+  if (numMatch) {
+    return `grade-${numMatch[1]}`;
+  }
 
-  // Fallback: split by space/slash/dash
-  const parts = cleaned.split(/[\s\/\-_]+/);
-  if (parts.length > 1) return parts[0];
-
-  return cleaned;
+  const parts = name.split(/[\s\/\-_]+/);
+  return parts[0] || name;
 };
 
 /**
@@ -2491,15 +2504,32 @@ exports.bulkUpdateLessons = catchAsync(async (req, res) => {
   }
 
   const user = req.user;
-  const isSuperAdmin = user.role?.isSystem || false;
+  const userRole = user.role;
+  const isSuperAdmin = Boolean(
+    userRole?.isSystem ||
+    userRole?.name === "super_admin" ||
+    userRole?.name === "admin"
+  );
+  const userPermNames = (userRole?.permissions || []).map((p) =>
+    typeof p === "string" ? p : p.name,
+  );
+  const hasFullEdit = isSuperAdmin || userPermNames.includes("schedules.edit");
+
+  const userSubjectIds = (user.subjects || []).map((s) =>
+    s._id ? s._id.toString() : s.toString(),
+  );
 
   const ops = [];
   for (const item of updates) {
     if (!item.id) continue;
 
     const filter = { _id: item.id };
-    if (!isSuperAdmin) {
-      filter.teacher = user._id;
+    if (!hasFullEdit) {
+      const conditions = [{ teacher: user._id }];
+      if (userSubjectIds.length > 0) {
+        conditions.push({ subject: { $in: userSubjectIds } });
+      }
+      filter.$or = conditions;
     }
 
     const setFields = { updatedBy: user._id };
