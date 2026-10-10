@@ -893,7 +893,8 @@ exports.getWeeklyPlanCompletion = catchAsync(async (req, res) => {
     const totalAssigned = tSchedules.length;
 
     const missingSlots = [];
-    let completedCount = 0;
+    let preparedLessonCount = 0;
+    let preparedHomeworkCount = 0;
     let missingLessonCount = 0;
     let missingHomeworkCount = 0;
 
@@ -901,12 +902,16 @@ exports.getWeeklyPlanCompletion = catchAsync(async (req, res) => {
       const hasLesson = !!(s.lessonTitle && s.lessonTitle.trim().length > 0);
       const hasHomework = !!(s.homework && s.homework.trim().length > 0);
 
-      if (!hasLesson) missingLessonCount++;
-      if (!hasHomework) missingHomeworkCount++;
+      if (hasLesson) preparedLessonCount++;
+      else missingLessonCount++;
 
-      if (hasLesson && hasHomework) {
-        completedCount++;
-      } else {
+      if (hasHomework) preparedHomeworkCount++;
+      else missingHomeworkCount++;
+
+      const subjectName = (s.subject?.name || "").trim();
+      const isNoHomeworkSubject = /بدنية|رياضة|حياتية/.test(subjectName);
+
+      if (!hasLesson || (!hasHomework && !isNoHomeworkSubject)) {
         missingSlots.push({
           scheduleId: s._id,
           day: s.day,
@@ -914,24 +919,25 @@ exports.getWeeklyPlanCompletion = catchAsync(async (req, res) => {
           className: s.className || "غير محدد",
           subjectName: s.subject?.name || "",
           missingLessonTitle: !hasLesson,
-          missingHomework: !hasHomework,
+          missingHomework: !hasHomework && !isNoHomeworkSubject,
           lessonTitle: s.lessonTitle || "",
           homework: s.homework || "",
         });
       }
     });
 
+    const completedCount = preparedLessonCount;
     const completionRate =
       totalAssigned > 0
         ? Math.round((completedCount / totalAssigned) * 100)
         : 0;
 
-    let status = "COMPLETED";
+    let status = "NO_CLASSES";
     if (totalAssigned === 0) {
       status = "NO_CLASSES";
     } else if (completedCount === totalAssigned) {
       status = "COMPLETED";
-    } else if (completedCount === 0) {
+    } else if (completedCount === 0 && preparedHomeworkCount === 0) {
       status = "NOT_STARTED";
     } else {
       status = "PARTIAL";
@@ -947,6 +953,8 @@ exports.getWeeklyPlanCompletion = catchAsync(async (req, res) => {
       },
       totalAssigned,
       completedCount,
+      preparedLessonCount,
+      preparedHomeworkCount,
       missingLessonCount,
       missingHomeworkCount,
       missingSlotsCount: missingSlots.length,
