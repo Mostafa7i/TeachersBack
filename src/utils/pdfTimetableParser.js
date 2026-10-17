@@ -281,6 +281,31 @@ function normalizeSubject(rawSubject, existingSubjects = []) {
 }
 
 /**
+ * Initialize pdfjs-dist safely for Node.js / Serverless (Vercel) environments.
+ * Pre-binds pdf.worker.mjs to globalThis.pdfjsWorker so pdfjs-dist uses the in-memory
+ * fake worker without attempting to load external worker modules from missing disk paths.
+ */
+let pdfjsLibPromise = null;
+async function initPdfJs() {
+  if (!pdfjsLibPromise) {
+    pdfjsLibPromise = (async () => {
+      if (!globalThis.pdfjsWorker) {
+        try {
+          const worker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+          globalThis.pdfjsWorker = worker;
+        } catch (err) {
+          console.warn("Notice: pdf.worker.mjs direct import fallback:", err?.message);
+        }
+      }
+
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      return pdfjs;
+    })();
+  }
+  return pdfjsLibPromise;
+}
+
+/**
  * Main parser function: processes PDF buffer using coordinate-based extraction
  * Supports aSc Timetables and other standard school schedule layouts
  */
@@ -289,8 +314,13 @@ async function parseTimetablePdf(
   existingTeachers = [],
   existingSubjects = [],
 ) {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
+  const pdfjs = await initPdfJs();
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
+  const doc = await loadingTask.promise;
 
   const detectedTimetables = [];
 

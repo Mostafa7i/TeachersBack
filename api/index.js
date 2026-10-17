@@ -8,6 +8,12 @@ const app = require("../src/app");
 const connectDB = require("../src/config/db");
 const { ensureSystemInit } = require("../src/utils/initSystem");
 
+// Trace hint for Vercel NFT (Node File Trace) to bundle pdfjs-dist assets
+try {
+  require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
+  require.resolve("pdfjs-dist/legacy/build/pdf.mjs");
+} catch (_) {}
+
 let initialized = false;
 
 module.exports = async (req, res) => {
