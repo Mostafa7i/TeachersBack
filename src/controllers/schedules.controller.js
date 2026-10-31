@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Schedule = require("../models/Schedule.model");
 const Week = require("../models/Week.model");
 const Subject = require("../models/Subject.model");
@@ -47,7 +48,13 @@ exports.getByWeek = catchAsync(async (req, res) => {
   }
 
   const query = { week: weekId };
-  if (teacherId) query.teacher = teacherId;
+  if (teacherId) {
+    if (mongoose.Types.ObjectId.isValid(teacherId)) {
+      query.teacher = teacherId;
+    } else {
+      query.customTeacherName = teacherId;
+    }
+  }
   if (subjectId) query.subject = subjectId;
   if (className) query.className = className;
 
@@ -339,7 +346,8 @@ exports.create = catchAsync(async (req, res) => {
     dayDate,
     period,
     subject: subjectId,
-    teacher: teacherId,
+    teacher: rawTeacher,
+    customTeacherName: rawCustomName,
     className,
     room,
     lessonTitle,
@@ -370,6 +378,25 @@ exports.create = catchAsync(async (req, res) => {
     }
   }
 
+  // Resolve teacher: ObjectId or custom teacher name
+  let resolvedTeacher = null;
+  let resolvedCustomTeacherName = "";
+
+  if (rawCustomName && String(rawCustomName).trim()) {
+    resolvedCustomTeacherName = String(rawCustomName).trim();
+  }
+
+  if (rawTeacher) {
+    if (mongoose.Types.ObjectId.isValid(rawTeacher)) {
+      resolvedTeacher = rawTeacher;
+    } else if (typeof rawTeacher === "string" && rawTeacher.trim()) {
+      resolvedCustomTeacherName = rawTeacher.trim();
+      resolvedTeacher = null;
+    }
+  } else if (!isSuperAdmin) {
+    resolvedTeacher = user._id;
+  }
+
   const resolvedDate = dayDate
     ? new Date(dayDate)
     : calculateDayDate(week.startDate, day);
@@ -383,8 +410,8 @@ exports.create = catchAsync(async (req, res) => {
 
   if (className && className.trim()) {
     searchFilter.className = className.trim();
-  } else {
-    searchFilter.teacher = teacherId || user._id;
+  } else if (resolvedTeacher) {
+    searchFilter.teacher = resolvedTeacher;
   }
 
   let schedule = await Schedule.findOne(searchFilter);
@@ -393,6 +420,10 @@ exports.create = catchAsync(async (req, res) => {
     schedule.subject = subjectId;
     if (className !== undefined) schedule.className = className.trim();
     if (room !== undefined) schedule.room = room.trim();
+    if (rawTeacher !== undefined || rawCustomName !== undefined) {
+      schedule.teacher = resolvedTeacher;
+      schedule.customTeacherName = resolvedCustomTeacherName;
+    }
     if (lessonTitle !== undefined) schedule.lessonTitle = lessonTitle;
     if (homework !== undefined) schedule.homework = homework;
     if (activities !== undefined) schedule.activities = activities;
@@ -406,7 +437,8 @@ exports.create = catchAsync(async (req, res) => {
       dayDate: resolvedDate,
       period,
       subject: subjectId,
-      teacher: teacherId || user._id,
+      teacher: resolvedTeacher,
+      customTeacherName: resolvedCustomTeacherName,
       className: className ? className.trim() : "",
       room: room ? room.trim() : "",
       lessonTitle: lessonTitle || "",
@@ -498,7 +530,24 @@ exports.update = catchAsync(async (req, res) => {
     if (activities !== undefined) schedule.activities = activities;
     if (notes !== undefined) schedule.notes = notes;
     if (subject) schedule.subject = subject;
-    if (teacher) schedule.teacher = teacher;
+
+    if (req.body.customTeacherName !== undefined) {
+      schedule.customTeacherName = String(req.body.customTeacherName || "").trim();
+    }
+
+    if (teacher !== undefined) {
+      if (teacher && mongoose.Types.ObjectId.isValid(teacher)) {
+        schedule.teacher = teacher;
+        if (!req.body.customTeacherName) {
+          schedule.customTeacherName = "";
+        }
+      } else if (typeof teacher === "string" && teacher.trim()) {
+        schedule.teacher = null;
+        schedule.customTeacherName = teacher.trim();
+      } else {
+        schedule.teacher = null;
+      }
+    }
     if (className !== undefined) schedule.className = className;
     if (room !== undefined) schedule.room = room;
     if (period !== undefined) schedule.period = period;
@@ -807,6 +856,7 @@ exports.copyWeek = catchAsync(async (req, res) => {
       period: s.period,
       subject: s.subject,
       teacher: s.teacher,
+      customTeacherName: s.customTeacherName || "",
       className: s.className || "",
       room: s.room || "",
       lessonTitle: s.lessonTitle || "",
@@ -1021,8 +1071,16 @@ exports.getWeeklyPlanCompletion = catchAsync(async (req, res) => {
 
 // POST /api/schedules/master-cell (Assign/Update or Clear a single cell in master grid)
 exports.saveMasterCell = catchAsync(async (req, res) => {
-  const { weekId, day, period, teacherId, subjectId, className, room } =
-    req.body;
+  let {
+    weekId,
+    day,
+    period,
+    teacherId,
+    subjectId,
+    className,
+    room,
+    customTeacherName,
+  } = req.body;
 
   if (!weekId || !day || !period) {
     return error(res, "الأسبوع واليوم ورقم الحصة مطلوبة", 400);
@@ -1033,29 +1091,63 @@ exports.saveMasterCell = catchAsync(async (req, res) => {
 
   const resolvedDate = calculateDayDate(week.startDate, day);
 
-  // If clearing (no teacher or no subject provided)
-  if (!teacherId || !subjectId) {
-    if (teacherId) {
-      await Schedule.deleteMany({
-        week: weekId,
-        day,
-        period: Number(period),
-        teacher: teacherId,
-      });
+  // Normalize custom teacher name vs ObjectId
+  let isCustom = false;
+  let resolvedTeacher = teacherId;
+  let resolvedCustomName = (customTeacherName || "").trim();
+
+  if (teacherId === "__custom__" || !teacherId) {
+    resolvedTeacher = null;
+    isCustom = true;
+  } else if (
+    typeof teacherId === "string" &&
+    !mongoose.Types.ObjectId.isValid(teacherId)
+  ) {
+    resolvedTeacher = null;
+    if (!resolvedCustomName) {
+      resolvedCustomName = teacherId.trim();
     }
+    isCustom = true;
+  }
+
+  // If clearing (no teacher & no custom name, or no subject provided)
+  if ((!resolvedTeacher && !resolvedCustomName) || !subjectId) {
+    const deleteQuery = {
+      week: weekId,
+      day,
+      period: Number(period),
+    };
+    if (resolvedTeacher) {
+      deleteQuery.teacher = resolvedTeacher;
+    } else if (className) {
+      deleteQuery.className = className.trim();
+    } else if (resolvedCustomName) {
+      deleteQuery.customTeacherName = resolvedCustomName;
+    }
+    await Schedule.deleteMany(deleteQuery);
     return success(res, null, "تم تفريغ الحصة بنجاح ✅");
   }
 
-  // Check / Upsert for this teacher/day/period
-  let schedule = await Schedule.findOne({
+  // Check / Upsert for this slot
+  let query = {
     week: weekId,
     day,
     period: Number(period),
-    teacher: teacherId,
-  });
+  };
+  if (resolvedTeacher) {
+    query.teacher = resolvedTeacher;
+  } else if (className) {
+    query.className = className.trim();
+  } else {
+    query.customTeacherName = resolvedCustomName;
+  }
+
+  let schedule = await Schedule.findOne(query);
 
   if (schedule) {
     schedule.subject = subjectId;
+    schedule.teacher = resolvedTeacher;
+    schedule.customTeacherName = resolvedCustomName;
     schedule.className = className ? className.trim() : "";
     schedule.room = room ? room.trim() : "";
     schedule.dayDate = resolvedDate;
@@ -1068,7 +1160,8 @@ exports.saveMasterCell = catchAsync(async (req, res) => {
       dayDate: resolvedDate,
       period: Number(period),
       subject: subjectId,
-      teacher: teacherId,
+      teacher: resolvedTeacher,
+      customTeacherName: resolvedCustomName,
       className: className ? className.trim() : "",
       room: room ? room.trim() : "",
       createdBy: req.user._id,

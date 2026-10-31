@@ -37,6 +37,11 @@ const scheduleSchema = new mongoose.Schema(
       ref: 'User',
       index: true,
     },
+    customTeacherName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     className: {
       type: String,
       trim: true,
@@ -98,6 +103,32 @@ const scheduleSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: {
+      virtuals: true,
+      transform: (doc, ret) => {
+        if (!ret.teacher && ret.customTeacherName) {
+          ret.teacher = {
+            _id: null,
+            name: ret.customTeacherName,
+            isCustom: true,
+          };
+        }
+        return ret;
+      },
+    },
+    toObject: {
+      virtuals: true,
+      transform: (doc, ret) => {
+        if (!ret.teacher && ret.customTeacherName) {
+          ret.teacher = {
+            _id: null,
+            name: ret.customTeacherName,
+            isCustom: true,
+          };
+        }
+        return ret;
+      },
+    },
   }
 );
 
