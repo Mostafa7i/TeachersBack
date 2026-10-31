@@ -5,9 +5,14 @@ const { success, error } = require("../utils/apiResponse");
 const { createAuditLog } = require("../middleware/auditLog.middleware");
 
 exports.getAll = catchAsync(async (req, res) => {
-  const page = parseInt(req.query.page, 10) || 1;
-  const limit = parseInt(req.query.limit, 10) || 10;
-  const skip = (page - 1) * limit;
+  const isAll =
+    req.query.all === "true" ||
+    req.query.limit === "0" ||
+    req.query.limit === "all";
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const rawLimit = parseInt(req.query.limit, 10);
+  const limit = isAll ? 0 : (!isNaN(rawLimit) ? Math.max(rawLimit, 1) : 50);
+  const skip = isAll ? 0 : (page - 1) * limit;
 
   const query = {};
 
@@ -28,21 +33,25 @@ exports.getAll = catchAsync(async (req, res) => {
     query.isActive = req.query.isActive === "true";
   }
 
+  let usersQuery = User.find(query)
+    .populate("role", "name description isSystem")
+    .populate("subjects", "name code color")
+    .sort({ createdAt: -1 });
+
+  if (!isAll && limit > 0) {
+    usersQuery = usersQuery.skip(skip).limit(limit);
+  }
+
   const [users, total] = await Promise.all([
-    User.find(query)
-      .populate("role", "name description isSystem")
-      .populate("subjects", "name code color")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit),
+    usersQuery,
     User.countDocuments(query),
   ]);
 
   return success(res, users, "تم جلب قائمة المستخدمين بنجاح", 200, {
-    page,
-    limit,
+    page: isAll ? 1 : page,
+    limit: isAll ? total : limit,
     total,
-    pages: Math.ceil(total / limit),
+    pages: isAll || limit === 0 ? 1 : Math.ceil(total / limit) || 1,
   });
 });
 
