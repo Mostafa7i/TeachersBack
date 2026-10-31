@@ -93,18 +93,10 @@ exports.getForTeacher = catchAsync(async (req, res) => {
         .filter(Boolean)
     : [];
 
-  const orConditions = [{ teacher: user._id }];
-  if (userSubjects.length > 0) {
-    orConditions.push({ subject: { $in: userSubjects } });
-  }
-
-  // Find schedules assigned to this teacher or matching their subjects for this week
   // A teacher's timetable and weekly plan must only contain slots assigned to
-  // that teacher. Matching by subject here would expose other teachers' slots
-  // (and let them appear as preparation work for the current teacher).
+  // that teacher to maintain strict isolation and performance.
   const schedules = await Schedule.find({
     week: targetWeekId,
-    $or: orConditions,
     teacher: user._id,
   })
     .populate("subject", "name nameEn code color")
@@ -880,8 +872,12 @@ exports.getWeeklyPlanCompletion = catchAsync(async (req, res) => {
 
   const schedulesByTeacher = {};
   weekSchedules.forEach((s) => {
-    if (s.teacher?._id) {
-      const tId = s.teacher._id.toString();
+    const tId = s.teacher?._id
+      ? s.teacher._id.toString()
+      : s.teacher
+        ? s.teacher.toString()
+        : null;
+    if (tId) {
       if (!schedulesByTeacher[tId]) schedulesByTeacher[tId] = [];
       schedulesByTeacher[tId].push(s);
     }
@@ -895,18 +891,29 @@ exports.getWeeklyPlanCompletion = catchAsync(async (req, res) => {
     const missingSlots = [];
     let preparedLessonCount = 0;
     let preparedHomeworkCount = 0;
+    let startedCount = 0;
     let missingLessonCount = 0;
     let missingHomeworkCount = 0;
 
     tSchedules.forEach((s) => {
       const hasLesson = !!(s.lessonTitle && s.lessonTitle.trim().length > 0);
       const hasHomework = !!(s.homework && s.homework.trim().length > 0);
+      const hasOther = !!(
+        (s.objectives && s.objectives.trim().length > 0) ||
+        (s.warmUp && s.warmUp.trim().length > 0) ||
+        (s.activities && s.activities.trim().length > 0) ||
+        (s.notes && s.notes.trim().length > 0)
+      );
 
       if (hasLesson) preparedLessonCount++;
       else missingLessonCount++;
 
       if (hasHomework) preparedHomeworkCount++;
       else missingHomeworkCount++;
+
+      if (hasLesson || hasHomework || hasOther) {
+        startedCount++;
+      }
 
       const subjectName = (s.subject?.name || "").trim();
       const isNoHomeworkSubject = /بدنية|رياضة|حياتية/.test(subjectName);
@@ -926,7 +933,7 @@ exports.getWeeklyPlanCompletion = catchAsync(async (req, res) => {
       }
     });
 
-    const completedCount = preparedLessonCount;
+    const completedCount = preparedLessonCount > 0 ? preparedLessonCount : startedCount;
     const completionRate =
       totalAssigned > 0
         ? Math.round((completedCount / totalAssigned) * 100)
@@ -935,9 +942,9 @@ exports.getWeeklyPlanCompletion = catchAsync(async (req, res) => {
     let status = "NO_CLASSES";
     if (totalAssigned === 0) {
       status = "NO_CLASSES";
-    } else if (completedCount === totalAssigned) {
+    } else if (preparedLessonCount === totalAssigned && missingSlots.length === 0) {
       status = "COMPLETED";
-    } else if (completedCount === 0 && preparedHomeworkCount === 0) {
+    } else if (startedCount === 0) {
       status = "NOT_STARTED";
     } else {
       status = "PARTIAL";
@@ -955,6 +962,7 @@ exports.getWeeklyPlanCompletion = catchAsync(async (req, res) => {
       completedCount,
       preparedLessonCount,
       preparedHomeworkCount,
+      startedCount,
       missingLessonCount,
       missingHomeworkCount,
       missingSlotsCount: missingSlots.length,

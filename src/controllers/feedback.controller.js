@@ -1,5 +1,5 @@
-import mongoose from "mongoose";
-import Feedback from "../models/Feedback.model.js";
+const mongoose = require("mongoose");
+const Feedback = require("../models/Feedback.model");
 
 /*
  * Feedback Controller
@@ -37,7 +37,11 @@ const getRoleName = (req) => {
 };
 
 const isAdmin = (req) =>
-  Boolean(req.user?.isSuperAdmin || ADMIN_ROLES.has(getRoleName(req)));
+  Boolean(
+    req.user?.isSuperAdmin ||
+    req.user?.role?.isSystem ||
+    ADMIN_ROLES.has(getRoleName(req))
+  );
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -54,7 +58,7 @@ const getErrorMessage = (error, fallback) => {
  * POST /feedback
  * إنشاء ملاحظة/اقتراح/شكوى من المستخدم الحالي.
  */
-export const createFeedback = async (req, res) => {
+const createFeedback = async (req, res) => {
   try {
     const userId = getUserId(req);
     if (!userId) {
@@ -158,7 +162,7 @@ export const createFeedback = async (req, res) => {
  * GET /feedback/me
  * عرض ملاحظات المستخدم الحالي فقط.
  */
-export const getMyFeedback = async (req, res) => {
+const getMyFeedback = async (req, res) => {
   try {
     const userId = getUserId(req);
     if (!userId) {
@@ -210,7 +214,7 @@ export const getMyFeedback = async (req, res) => {
  * GET /feedback/all
  * عرض جميع الملاحظات للمسؤول مع البحث والفلاتر والترقيم.
  */
-export const getAllFeedback = async (req, res) => {
+const getAllFeedback = async (req, res) => {
   try {
     if (!isAdmin(req)) {
       return res.status(403).json({
@@ -287,7 +291,7 @@ export const getAllFeedback = async (req, res) => {
  * PUT /feedback/:id/reply
  * رد المسؤول على الملاحظة وتغيير حالتها إلى REPLIED.
  */
-export const replyToFeedback = async (req, res) => {
+const replyToFeedback = async (req, res) => {
   try {
     if (!isAdmin(req)) {
       return res.status(403).json({
@@ -357,7 +361,7 @@ export const replyToFeedback = async (req, res) => {
  * DELETE /feedback/:id
  * حذف الملاحظة: المسؤول يستطيع حذف أي ملاحظة، والمستخدم يستطيع حذف ملاحظته فقط.
  */
-export const deleteFeedback = async (req, res) => {
+const deleteFeedback = async (req, res) => {
   try {
     const { id } = req.params;
     if (!isValidId(id)) {
@@ -390,7 +394,7 @@ export const deleteFeedback = async (req, res) => {
   }
 };
 
-export default {
+module.exports = {
   createFeedback,
   getMyFeedback,
   getAllFeedback,

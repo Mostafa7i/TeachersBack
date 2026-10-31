@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 
 const { Schema } = mongoose;
 
@@ -135,4 +135,4 @@ feedbackSchema.pre("findOneAndUpdate", function (next) {
 const Feedback =
   mongoose.models.Feedback || mongoose.model("Feedback", feedbackSchema);
 
-export default Feedback;
+module.exports = Feedback;

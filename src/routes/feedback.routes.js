@@ -1,8 +1,7 @@
 const express = require('express');
-const { default: feedbackController } = require('../controllers/feedback.controller');
+const feedbackController = require('../controllers/feedback.controller');
 const router = express.Router();
 const { protect } = require("../middleware/auth.middleware");
-
 
 router.post("/", protect, feedbackController.createFeedback);
 router.get("/me", protect, feedbackController.getMyFeedback);

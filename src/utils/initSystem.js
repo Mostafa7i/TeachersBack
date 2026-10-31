@@ -166,6 +166,20 @@ const DEFAULT_PERMISSIONS = [
     module: "audit-logs",
     action: "view",
   },
+
+  // Feedback
+  {
+    name: "feedback.view",
+    description: "عرض الملاحظات والشكاوى والاقتراحات",
+    module: "feedback",
+    action: "view",
+  },
+  {
+    name: "feedback.reply",
+    description: "الرد على الملاحظات والشكاوى",
+    module: "feedback",
+    action: "reply",
+  },
 ];
 
 const REQUIRED_SUBJECTS = [
