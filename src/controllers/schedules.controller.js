@@ -235,8 +235,16 @@ exports.saveTeacherTimetable = catchAsync(async (req, res) => {
     teacher: teacherId,
   });
 
-  const validEntries = entries
-    .filter((e) => e.day && e.period && e.subject)
+  // Deduplicate entries by day + period to strictly prevent any duplicate slots
+  const uniqueSlotMap = new Map();
+  entries.forEach((e) => {
+    if (e.day && e.period && e.subject) {
+      const slotKey = `${e.day}_${Number(e.period)}`;
+      uniqueSlotMap.set(slotKey, e);
+    }
+  });
+
+  const validEntries = Array.from(uniqueSlotMap.values())
     .map((e) => {
       const resolvedDate = e.dayDate
         ? new Date(e.dayDate)

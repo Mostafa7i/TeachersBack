@@ -135,7 +135,13 @@ const scheduleSchema = new mongoose.Schema(
 // Compound index to quickly find cells and avoid duplicates per week+day+period+teacher
 scheduleSchema.index({ week: 1, teacher: 1 });
 scheduleSchema.index({ week: 1, teacher: 1, className: 1 });
-scheduleSchema.index({ week: 1, day: 1, period: 1, teacher: 1 });
+scheduleSchema.index(
+  { week: 1, day: 1, period: 1, teacher: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { teacher: { $type: "objectId" } },
+  }
+);
 scheduleSchema.index({ week: 1, day: 1, period: 1, subject: 1 });
 
 module.exports = mongoose.model('Schedule', scheduleSchema);
